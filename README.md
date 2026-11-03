@@ -8,7 +8,7 @@
 |---|---|
 | **Team** | Aryan Mashalkar (solo) |
 | **Live demo** | **https://second-look-credit.streamlit.app** |
-| **Demo video** | _video link goes here_ |
+| **Demo video** | [docs/second-look-demo.mp4](docs/second-look-demo.mp4) (2 min, captioned) |
 
 ![Review queue](docs/queue.png)
 
@@ -157,5 +157,7 @@ pytest -q                      # 11 tests: features, metrics, and checks on the 
 Data: [Home Credit Default Risk](https://www.kaggle.com/competitions/home-credit-default-risk), used under the competition's rules. **No raw rows are committed or deployed.** The demo profiles in `artifacts/demo_profiles.csv` are synthetic: each is assembled from blocks of fields (loan terms, work, home, social circle, history, external scores) taken from *different* random training applicants, then jittered, so no profile is a real person ([`secondlook/demo_data.py`](secondlook/demo_data.py)). Gender and age are used only to audit fairness.
 
 ## AI tools used
+
+The demo video is a real screen recording of the app (Playwright, `video/record.py`) with an **AI-generated voiceover from ElevenLabs** (premade voice "Eric", script in `video/make_voiceover.py`) and burned-in captions.
 
 This project was built with **Claude Code (Anthropic, Claude Opus 5.5)**, which helped research the problem space, write the code, tests and README, and debug. One bug it caught: `AMT_ANNUITY` is a monthly payment, not yearly. The modelling choices, evaluation design and every reported number were checked by running the code on the real data; the numbers in this README are copied from `artifacts/metrics.json`.
