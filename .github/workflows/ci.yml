@@ -1,0 +1,16 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -r requirements.txt pytest==8.4.2
+      - name: Unit tests and checks on the shipped model artifacts
+        run: pytest -q
+      - name: App starts without errors
+        run: |
+          python -c "from streamlit.testing.v1 import AppTest; at = AppTest.from_file('streamlit_app.py', default_timeout=60).run(); assert not at.exception, at.exception"

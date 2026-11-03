@@ -1,0 +1,135 @@
+audit {
+ "applicants": 307511,
+ "default_rate": 0.08072881945686496,
+ "no_bureau_applicants": 44020,
+ "no_bureau_share": 0.14314935075493235,
+ "no_bureau_default_rate": 0.10124943207632894,
+ "bureau_default_rate": 0.07730055296006315,
+ "ext_source_missing_no_bureau": {
+  "EXT_SOURCE_1": 0.6079509313948205,
+  "EXT_SOURCE_2": 0.0031803725579282144,
+  "EXT_SOURCE_3": 0.9694684234438892
+ },
+ "ext_source_all_missing_no_bureau": 0.0019990913221263062,
+ "no_bureau_with_lender_history": 0.9438891412994094
+}
+split train=209106 valid=36902 test=61503
+trees second_look=610 combined=606
+{
+ "no_bureau": {
+  "auc": {
+   "baseline": {
+    "auc": 0.6733008220855224,
+    "ci_low": 0.6540410684540815,
+    "ci_high": 0.6908675926556507,
+    "brier": 0.08768399123964382
+   },
+   "second_look": {
+    "auc": 0.7257196421862162,
+    "ci_low": 0.7086325635055021,
+    "ci_high": 0.7417892544494165,
+    "brier": 0.084878757601355,
+    "delta_vs_baseline": {
+     "mean": 0.052418820100693764,
+     "ci_low": 0.030296194647075277,
+     "ci_high": 0.07430351667590407,
+     "share_positive": 1.0
+    }
+   },
+   "application_only": {
+    "auc": 0.7090658895284195,
+    "ci_low": 0.691172273405422,
+    "ci_high": 0.7260790963920887,
+    "brier": 0.08603335145780165,
+    "delta_vs_baseline": {
+     "mean": 0.03576506744289709,
+     "ci_low": 0.01377610868044575,
+     "ci_high": 0.057874802890997105,
+     "share_positive": 1.0
+    }
+   },
+   "combined": {
+    "auc": 0.7478147241827262,
+    "ci_low": 0.7314408424257923,
+    "ci_high": 0.7637582385576934,
+    "brier": 0.08360528672324716,
+    "delta_vs_baseline": {
+     "mean": 0.07451390209720377,
+     "ci_low": 0.06071014283268203,
+     "ci_high": 0.08852662329729125,
+     "share_positive": 1.0
+    }
+   }
+  },
+  "policy": {
+   "second_look": {
+    "baseline_approval_rate": 0.7999772830531576,
+    "baseline_bad_rate": 0.07709782763027119,
+    "model_approval_rate": 0.8659700136301681,
+    "model_bad_rate": 0.07699370409233998,
+    "extra_approved_per_10k": 659.9273057701046,
+    "extra_repayers_per_10k": 609.9500227169468
+   },
+   "application_only": {
+    "baseline_approval_rate": 0.7999772830531576,
+    "baseline_bad_rate": 0.07709782763027119,
+    "model_approval_rate": 0.8378009995456611,
+    "model_bad_rate": 0.0770065075921909,
+    "extra_approved_per_10k": 378.2371649250341,
+    "extra_repayers_per_10k": 349.8409813721036
+   },
+   "combined": {
+    "baseline_approval_rate": 0.7999772830531576,
+    "baseline_bad_rate": 0.07709782763027119,
+    "model_approval_rate": 0.8914129940935939,
+    "model_bad_rate": 0.07708970438328236,
+    "extra_approved_per_10k": 914.3571104043617,
+    "extra_repayers_per_10k": 843.9345751930941
+   }
+  }
+ },
+ "decision_changes_no_bureau": {
+  "both_approve": {
+   "n": 6321,
+   "default_rate": 0.062173706691979115
+  },
+  "second_look_only": {
+   "n": 1303,
+   "default_rate": 0.1488871834228703
+  },
+  "baseline_only": {
+   "n": 722,
+   "default_rate": 0.2077562326869806
+  },
+  "both_decline": {
+   "n": 458,
+   "default_rate": 0.33624454148471616
+  }
+ },
+ "fairness_gaps": [
+  {
+   "model": "baseline",
+   "attribute": "AGE_BAND",
+   "approval_gap": 0.17740636037319168,
+   "repayer_approval_gap": 0.1628039539156909
+  },
+  {
+   "model": "baseline",
+   "attribute": "CODE_GENDER",
+   "approval_gap": 0.05870323477570061,
+   "repayer_approval_gap": 0.046846783095058186
+  },
+  {
+   "model": "second_look",
+   "attribute": "AGE_BAND",
+   "approval_gap": 0.2139183046451012,
+   "repayer_approval_gap": 0.1868331687271264
+  },
+  {
+   "model": "second_look",
+   "attribute": "CODE_GENDER",
+   "approval_gap": 0.0657013941347746,
+   "repayer_approval_gap": 0.05449656271918779
+  }
+ ]
+}

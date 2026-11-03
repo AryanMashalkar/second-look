@@ -1,0 +1,308 @@
+{
+ "audit": {
+  "applicants": 307511,
+  "default_rate": 0.08072881945686496,
+  "no_bureau_applicants": 44020,
+  "no_bureau_share": 0.14314935075493235,
+  "no_bureau_default_rate": 0.10124943207632894,
+  "bureau_default_rate": 0.07730055296006315,
+  "ext_source_missing_no_bureau": {
+   "EXT_SOURCE_1": 0.6079509313948205,
+   "EXT_SOURCE_2": 0.0031803725579282144,
+   "EXT_SOURCE_3": 0.9694684234438892
+  },
+  "ext_source_all_missing_no_bureau": 0.0019990913221263062,
+  "no_bureau_with_lender_history": 0.9438891412994094
+ },
+ "split": {
+  "train": 209106,
+  "valid": 36902,
+  "test": 61503,
+  "test_no_bureau": 8804
+ },
+ "no_bureau": {
+  "auc": {
+   "baseline": {
+    "auc": 0.6733008220855224,
+    "ci_low": 0.6540410684540815,
+    "ci_high": 0.6908675926556507,
+    "brier": 0.08768399123964382
+   },
+   "second_look": {
+    "auc": 0.7257196421862162,
+    "ci_low": 0.7086325635055021,
+    "ci_high": 0.7417892544494165,
+    "brier": 0.084878757601355,
+    "delta_vs_baseline": {
+     "mean": 0.052418820100693764,
+     "ci_low": 0.030296194647075277,
+     "ci_high": 0.07430351667590407,
+     "share_positive": 1.0
+    }
+   },
+   "application_only": {
+    "auc": 0.7090658895284195,
+    "ci_low": 0.691172273405422,
+    "ci_high": 0.7260790963920887,
+    "brier": 0.08603335145780165,
+    "delta_vs_baseline": {
+     "mean": 0.03576506744289709,
+     "ci_low": 0.01377610868044575,
+     "ci_high": 0.057874802890997105,
+     "share_positive": 1.0
+    }
+   },
+   "combined": {
+    "auc": 0.7478147241827262,
+    "ci_low": 0.7314408424257923,
+    "ci_high": 0.7637582385576934,
+    "brier": 0.08360528672324716,
+    "delta_vs_baseline": {
+     "mean": 0.07451390209720377,
+     "ci_low": 0.06071014283268203,
+     "ci_high": 0.08852662329729125,
+     "share_positive": 1.0
+    }
+   }
+  },
+  "policy": {
+   "second_look": {
+    "baseline_approval_rate": 0.7999772830531576,
+    "baseline_bad_rate": 0.07709782763027119,
+    "model_approval_rate": 0.8659700136301681,
+    "model_bad_rate": 0.07699370409233998,
+    "extra_approved_per_10k": 659.9273057701046,
+    "extra_repayers_per_10k": 609.9500227169468
+   },
+   "application_only": {
+    "baseline_approval_rate": 0.7999772830531576,
+    "baseline_bad_rate": 0.07709782763027119,
+    "model_approval_rate": 0.8378009995456611,
+    "model_bad_rate": 0.0770065075921909,
+    "extra_approved_per_10k": 378.2371649250341,
+    "extra_repayers_per_10k": 349.8409813721036
+   },
+   "combined": {
+    "baseline_approval_rate": 0.7999772830531576,
+    "baseline_bad_rate": 0.07709782763027119,
+    "model_approval_rate": 0.8914129940935939,
+    "model_bad_rate": 0.07708970438328236,
+    "extra_approved_per_10k": 914.3571104043617,
+    "extra_repayers_per_10k": 843.9345751930941
+   }
+  }
+ },
+ "all": {
+  "auc": {
+   "baseline": {
+    "auc": 0.7175469540453271,
+    "ci_low": 0.7099532768861243,
+    "ci_high": 0.7245285367759999,
+    "brier": 0.07011585585499086
+   },
+   "second_look": {
+    "auc": 0.7260617060589359,
+    "ci_low": 0.7185759550905304,
+    "ci_high": 0.7335425162406718,
+    "brier": 0.06972534853551406,
+    "delta_vs_baseline": {
+     "mean": 0.00851475201360885,
+     "ci_low": 2.9928804330189887e-05,
+     "ci_high": 0.01751757207959026,
+     "share_positive": 0.976
+    }
+   },
+   "application_only": {
+    "auc": 0.7149749046324021,
+    "ci_low": 0.7072488130947485,
+    "ci_high": 0.7231146251738394,
+    "brier": 0.07024236784346988,
+    "delta_vs_baseline": {
+     "mean": -0.0025720494129249927,
+     "ci_low": -0.01117487937432353,
+     "ci_high": 0.006571793739441517,
+     "share_positive": 0.276
+    }
+   },
+   "combined": {
+    "auc": 0.765938280973999,
+    "ci_low": 0.7591522984405831,
+    "ci_high": 0.7726924557145811,
+    "brier": 0.06751148194948975,
+    "delta_vs_baseline": {
+     "mean": 0.048391326928671874,
+     "ci_low": 0.043491992003085476,
+     "ci_high": 0.05315489272824457,
+     "share_positive": 1.0
+    }
+   }
+  },
+  "policy": {
+   "second_look": {
+    "baseline_approval_rate": 0.7999934962522154,
+    "baseline_bad_rate": 0.054042518596805006,
+    "model_approval_rate": 0.8069362470123409,
+    "model_bad_rate": 0.054040984102037115,
+    "extra_approved_per_10k": 69.42750760125521,
+    "extra_repayers_per_10k": 65.6878526250752
+   },
+   "application_only": {
+    "baseline_approval_rate": 0.7999934962522154,
+    "baseline_bad_rate": 0.054042518596805006,
+    "model_approval_rate": 0.7889533843877534,
+    "model_bad_rate": 0.05403623024132886,
+    "extra_approved_per_10k": -110.40111864461896,
+    "extra_repayers_per_10k": -104.38515194380761
+   },
+   "combined": {
+    "baseline_approval_rate": 0.7999934962522154,
+    "baseline_bad_rate": 0.054042518596805006,
+    "model_approval_rate": 0.8617628408370324,
+    "model_bad_rate": 0.054036716288371915,
+    "extra_approved_per_10k": 617.69344584817,
+    "extra_repayers_per_10k": 584.3617384517828
+   }
+  }
+ },
+ "thresholds": {
+  "baseline": 0.13289134540255765,
+  "second_look": 0.1691362748009884,
+  "combined": 0.2019788099794894
+ },
+ "decision_changes_no_bureau": {
+  "both_approve": {
+   "n": 6321,
+   "default_rate": 0.062173706691979115
+  },
+  "second_look_only": {
+   "n": 1303,
+   "default_rate": 0.1488871834228703
+  },
+  "baseline_only": {
+   "n": 722,
+   "default_rate": 0.2077562326869806
+  },
+  "both_decline": {
+   "n": 458,
+   "default_rate": 0.33624454148471616
+  }
+ },
+ "fairness_gaps": [
+  {
+   "model": "baseline",
+   "attribute": "AGE_BAND",
+   "approval_gap": 0.17740636037319168,
+   "repayer_approval_gap": 0.1628039539156909
+  },
+  {
+   "model": "baseline",
+   "attribute": "CODE_GENDER",
+   "approval_gap": 0.05870323477570061,
+   "repayer_approval_gap": 0.046846783095058186
+  },
+  {
+   "model": "second_look",
+   "attribute": "AGE_BAND",
+   "approval_gap": 0.2139183046451012,
+   "repayer_approval_gap": 0.1868331687271264
+  },
+  {
+   "model": "second_look",
+   "attribute": "CODE_GENDER",
+   "approval_gap": 0.0657013941347746,
+   "repayer_approval_gap": 0.05449656271918779
+  }
+ ],
+ "importance": [
+  {
+   "feature": "DAYS_EMPLOYED",
+   "label": "Time in current job",
+   "mean_abs_contribution": 0.1907091393247044
+  },
+  {
+   "feature": "TERM_MONTHS",
+   "label": "Loan term",
+   "mean_abs_contribution": 0.17497952615662768
+  },
+  {
+   "feature": "INST_LATE_SHARE",
+   "label": "Share of earlier instalments paid late",
+   "mean_abs_contribution": 0.1475911829045041
+  },
+  {
+   "feature": "PREV_APPLIED_TO_GRANTED",
+   "label": "Amount asked vs. granted on earlier loans",
+   "mean_abs_contribution": 0.13659083941980132
+  },
+  {
+   "feature": "GOODS_TO_CREDIT",
+   "label": "Goods price relative to loan",
+   "mean_abs_contribution": 0.1344904080464116
+  },
+  {
+   "feature": "DAYS_LAST_PHONE_CHANGE",
+   "label": "Time since phone number changed",
+   "mean_abs_contribution": 0.12795981188295139
+  },
+  {
+   "feature": "NAME_EDUCATION_TYPE",
+   "label": "Education",
+   "mean_abs_contribution": 0.10035950470018787
+  },
+  {
+   "feature": "PREV_REFUSED_SHARE",
+   "label": "Share of earlier applications refused",
+   "mean_abs_contribution": 0.09720441936534788
+  },
+  {
+   "feature": "ORGANIZATION_TYPE",
+   "label": "Employer type",
+   "mean_abs_contribution": 0.08697601421980954
+  },
+  {
+   "feature": "INST_COUNT",
+   "label": "Instalments paid on earlier loans",
+   "mean_abs_contribution": 0.08649065708434664
+  },
+  {
+   "feature": "OCCUPATION_TYPE",
+   "label": "Occupation",
+   "mean_abs_contribution": 0.08603746699811296
+  },
+  {
+   "feature": "REGION_RATING_CLIENT_W_CITY",
+   "label": "Lender's rating of home region and city",
+   "mean_abs_contribution": 0.0851649431117986
+  },
+  {
+   "feature": "OWN_CAR_AGE",
+   "label": "Age of own car",
+   "mean_abs_contribution": 0.08379867337546519
+  },
+  {
+   "feature": "AMT_GOODS_PRICE",
+   "label": "Price of goods financed",
+   "mean_abs_contribution": 0.08245428189326184
+  },
+  {
+   "feature": "DAYS_ID_PUBLISH",
+   "label": "Time since ID document was issued",
+   "mean_abs_contribution": 0.07950038022160712
+  }
+ ],
+ "params": {
+  "objective": "binary",
+  "learning_rate": 0.03,
+  "num_leaves": 31,
+  "min_child_samples": 200,
+  "feature_fraction": 0.8,
+  "bagging_fraction": 0.8,
+  "bagging_freq": 1,
+  "lambda_l2": 5.0,
+  "verbose": -1,
+  "seed": 42,
+  "trees_second_look": 610,
+  "trees_combined": 606
+ },
+ "runtime_seconds": 99.8
+}
