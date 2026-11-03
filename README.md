@@ -7,14 +7,14 @@
 | | |
 |---|---|
 | **Team** | Aryan Mashalkar (solo) |
-| **Live demo** | _Streamlit Cloud link goes here_ |
+| **Live demo** | **https://second-look-credit.streamlit.app** |
 | **Demo video** | _video link goes here_ |
 
 ![Review queue](docs/queue.png)
 
 ## Judge quick start
 
-1. Open the live demo. Nothing to install, no login.
+1. Open the [live demo](https://second-look-credit.streamlit.app). Nothing to install, no login. If it has been asleep it takes about 30 seconds to wake; if a red "failed to fetch" box appears, refresh the page once.
 2. **Review queue**: open any `Second look: approve` profile. The external score declines it; Second Look approves it and shows why, plus a counter-offer for declined cases.
 3. **Evidence**: every number is computed on **8,804 real held-out applicants with no bureau record**, with 95% bootstrap intervals.
 4. To check the numbers yourself: `python -m secondlook.train` rebuilds every metric in about 2 minutes (see [Run it locally](#run-it-locally)).
