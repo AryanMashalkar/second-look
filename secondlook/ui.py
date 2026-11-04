@@ -23,6 +23,7 @@ html, body, [class*="st-"], .stMarkdown, button, input, textarea, select {{
 }}
 /* The rule above also matches Streamlit's icon spans; give them their icon font back. */
 [data-testid="stIconMaterial"] {{ font-family: 'Material Symbols Rounded' !important; }}
+[data-testid="stTable"] th {{ word-break: normal; overflow-wrap: normal; }}
 .block-container {{ padding-top: 2.2rem; max-width: 1240px; }}
 h1, h2, h3 {{ font-family: 'Public Sans', sans-serif; color: {INK}; letter-spacing: -0.01em; }}
 h2 {{ font-weight: 700; font-size: 1.45rem; }}

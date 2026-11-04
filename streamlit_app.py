@@ -215,8 +215,8 @@ with desk:
                         "(TreeSHAP). Blue lowers the risk, red raises it.</p>", unsafe_allow_html=True)
             reasons_chart(row, key=f"reasons_{pid}")
             with st.expander("Every field in this case"):
-                st.dataframe(pd.DataFrame([(config.LABELS.get(f, f), fmt(f, row[f][0])) for f in config.SECOND_LOOK_FEATURES],
-                                          columns=["Field", "Value"]), hide_index=True, width="stretch")
+                st.table(pd.DataFrame([(config.LABELS.get(f, f), fmt(f, row[f][0])) for f in config.SECOND_LOOK_FEATURES],
+                                      columns=["Field", "Value"]).set_index("Field"))
         with terms_tab:
             offer_slip(row)
             st.markdown("**Try other terms**")
@@ -251,7 +251,7 @@ with desk:
                         st.success(f"Recorded: {choice} for {pid}.")
             if st.session_state.decisions:
                 log = pd.DataFrame(st.session_state.decisions).drop(columns="profile")
-                st.dataframe(log, hide_index=True, width="stretch")
+                st.table(log.set_index(log.columns[0]))
                 st.download_button("Download decision log (CSV)", log.to_csv(index=False), "decision_log.csv", "text/csv")
             else:
                 st.caption("Decisions you record appear here and can be downloaded as a CSV log.")
@@ -377,8 +377,7 @@ with evidence:
                                               arrayminus=part["AUC"] - part["low"], color=color, thickness=2)))
     fig.update_layout(height=300, xaxis_title="AUC with 95% bootstrap interval (higher ranks risk better)")
     st.plotly_chart(fig, key="auc")
-    st.dataframe(auc[["Model", "Applicants", "AUC", "Gain vs external score (95% CI)"]].style.format({"AUC": "{:.3f}"}),
-                 hide_index=True, width="stretch")
+    st.table(auc[["Model", "Applicants", "AUC", "Gain vs external score (95% CI)"]].set_index("Model").style.format({"AUC": "{:.3f}"}))
     st.caption(
         f"The ablation shows where the gain comes from: without the lender's own history the gain falls from "
         f"{nb['auc']['second_look']['delta_vs_baseline']['mean']:+.3f} to {nb['auc']['application_only']['delta_vs_baseline']['mean']:+.3f}. "
@@ -463,7 +462,7 @@ with fair_tab:
         "Under 30": by_age["<30"].map("{:.0%}".format),
         "60 and over": by_age["60+"].map("{:.0%}".format),
     })
-    st.dataframe(table, hide_index=True, width="stretch")
+    st.table(table.set_index("Policy"))  # static HTML: st.dataframe's grid script sometimes fails to load on Streamlit Cloud
     sl_opt, np_opt, par_opt = (opts.set_index("option").loc[k] for k in
                                ("Second Look", "Second Look without pension signals", "Second Look, equal approval rate by age"))
     st.markdown(
