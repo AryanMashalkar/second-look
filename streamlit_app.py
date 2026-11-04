@@ -13,7 +13,7 @@ from secondlook import config, ui
 from secondlook.features import add_ratios
 from secondlook.model import Baseline, SecondLook
 
-st.set_page_config(page_title="Second Look", page_icon="🔎", layout="wide")
+st.set_page_config(page_title="Second Look", page_icon=":material/account_balance:", layout="wide")
 st.markdown(ui.CSS, unsafe_allow_html=True)
 ui.register_plotly_theme()
 
@@ -153,7 +153,7 @@ st.markdown(
     f"""
 <div class="sl-mast">
   <div>
-    <h1>🔎 Second Look</h1>
+    <h1>Second Look</h1>
     <p>One in seven applicants has no credit bureau record, and the external credit score judges them worst.
     Second Look re-reads their file from the application and the lender's own repayment records,
     explains itself, and leaves the decision to a loan officer.</p>
@@ -212,7 +212,7 @@ with desk:
         file_tab, terms_tab, decide_tab = st.tabs(["Why", "Counter-offer and what-if", "Decide"])
         with file_tab:
             st.markdown('<p class="sl-note">Each bar is the exact contribution of one factor to Second Look\'s score '
-                        "(TreeSHAP). Blue lowers the risk, red raises it.</p>", unsafe_allow_html=True)
+                        "(TreeSHAP). Green lowers the risk, red raises it.</p>", unsafe_allow_html=True)
             reasons_chart(row, key=f"reasons_{pid}")
             with st.expander("Every field in this case"):
                 st.table(pd.DataFrame([(config.LABELS.get(f, f), fmt(f, row[f][0])) for f in config.SECOND_LOOK_FEATURES],

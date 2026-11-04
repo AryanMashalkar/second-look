@@ -1,4 +1,4 @@
-# 🔎 Second Look
+# Second Look
 
 **A second opinion for loan applicants the credit bureau has never heard of.**
 

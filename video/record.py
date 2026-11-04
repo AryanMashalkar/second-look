@@ -21,7 +21,7 @@ CARD = """
   const d = document.createElement('div');
   d.id = 'sl-card';
   d.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;justify-content:center;'
-    + 'padding:0 110px;background:linear-gradient(135deg,#0b1d3a,#123f6b);color:#fff;font-family:Segoe UI,Arial,sans-serif;'
+    + 'padding:0 110px;background:#0A0D0B;border-left:14px solid #2FBF71;color:#E6EEE8;font-family:IBM Plex Sans,Segoe UI,Arial,sans-serif;'
     + 'opacity:0;transition:opacity .6s';
   d.innerHTML = html;
   document.body.appendChild(d);
@@ -30,14 +30,14 @@ CARD = """
 """
 
 TITLE = """
-<div style="font-size:72px;font-weight:700">🔎 Second Look</div>
+<div style="font-size:72px;font-weight:700">Second Look</div>
 <div style="font-size:30px;margin-top:18px;opacity:.92">A second opinion for loan applicants the credit bureau has never heard of</div>
 <div style="font-size:20px;margin-top:56px;opacity:.75">Neural Storm 2026 · Track 3: Human Impact · HI-04 Alternative Credit Scoring</div>
 <div style="font-size:20px;margin-top:8px;opacity:.75">Aryan Mashalkar</div>
 """
 
 CLOSE = """
-<div style="font-size:64px;font-weight:700">🔎 Second Look</div>
+<div style="font-size:64px;font-weight:700">Second Look</div>
 <div style="font-size:26px;margin-top:30px">Live demo: <b>second-look-credit.streamlit.app</b></div>
 <div style="font-size:26px;margin-top:10px">Code, tests and metrics: <b>github.com/AryanMashalkar/second-look</b></div>
 <div style="font-size:18px;margin-top:56px;opacity:.7">Data: Home Credit Default Risk (Kaggle). Demo profiles are synthetic. Voiceover is AI-generated (Microsoft neural TTS).</div>
