@@ -25,7 +25,7 @@ def application_features(app: pd.DataFrame) -> pd.DataFrame:
 def add_ratios(df: pd.DataFrame) -> None:
     """Affordability ratios. Recomputed whenever loan terms change (recourse)."""
     df["CREDIT_TO_INCOME"] = df["AMT_CREDIT"] / df["AMT_INCOME_TOTAL"]
-    df["ANNUITY_TO_INCOME"] = 12 * df["AMT_ANNUITY"] / df["AMT_INCOME_TOTAL"]  # annuity is monthly, income yearly
+    df["ANNUITY_TO_INCOME"] = df["AMT_ANNUITY"] / df["AMT_INCOME_TOTAL"]  # units are undisclosed; both behave like monthly amounts
     df["TERM_MONTHS"] = df["AMT_CREDIT"] / df["AMT_ANNUITY"]
     df["GOODS_TO_CREDIT"] = df["AMT_GOODS_PRICE"] / df["AMT_CREDIT"]
 

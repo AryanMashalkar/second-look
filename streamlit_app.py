@@ -1,18 +1,21 @@
-"""Second Look: a review queue for loan officers handling applicants with no credit bureau record."""
+"""Second Look: a second-opinion desk for loan applicants with no credit bureau record."""
 
 import json
 from datetime import datetime
 
+import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from secondlook import config
+from secondlook import config, ui
 from secondlook.features import add_ratios
 from secondlook.model import Baseline, SecondLook
 
 st.set_page_config(page_title="Second Look", page_icon="🔎", layout="wide")
+st.markdown(ui.CSS, unsafe_allow_html=True)
+ui.register_plotly_theme()
 
 
 @st.cache_resource
@@ -34,7 +37,21 @@ def load_artifacts():
 model, baseline = load_models()
 metrics, profiles, curves, fairness = load_artifacts()
 nb = metrics["no_bureau"]
-policy = nb["policy"]["second_look"]
+policy = nb["policy_holdout"]["second_look"]  # cut-offs fixed on validation, outcomes measured on test
+MODEL_NAMES = {
+    "baseline": "External credit score",
+    "application_only": "Second Look without lender history",
+    "second_look": "Second Look",
+    "combined": "Second Look + external score",
+}
+QUEUE_GROUPS = {
+    "Second look: approve": "Score declines, Second Look approves",
+    "Second look: caution": "Score approves, Second Look cautions",
+    "Both approve": "Both approve",
+    "Both decline": "Both decline",
+}
+if "decisions" not in st.session_state:
+    st.session_state.decisions = []
 
 
 def fmt(feature, value):
@@ -62,242 +79,377 @@ def fmt(feature, value):
     return str(value)
 
 
-def verdict(risk, threshold):
-    return "Approve" if risk <= threshold else "Decline"
+def score(row):
+    rb, rs = float(baseline.risk(row)[0]), float(model.risk(row)[0])
+    return rb, rb <= baseline.threshold, rs, rs <= model.threshold
 
 
-# ---------------------------------------------------------------- header
-st.title("🔎 Second Look")
-st.markdown(
-    "**A second opinion for applicants the credit bureau has never heard of.** "
-    "Lenders lean on opaque external scores, which are weakest exactly where there is no credit history. "
-    "Second Look re-scores those applicants from the application and the lender's own repayment records, "
-    "explains every decision, and leaves the final call to a loan officer."
-)
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Ranking quality (AUC), no-bureau applicants", f"{nb['auc']['second_look']['auc']:.3f}",
-          f"{nb['auc']['second_look']['delta_vs_baseline']['mean']:+.3f} vs external score")
-c2.metric("Extra applicants approved per 10,000", f"+{policy['extra_approved_per_10k']:,.0f}",
-          f"at the same {policy['baseline_bad_rate']:.1%} bad rate", delta_color="off")
-c3.metric("Of whom actually repaid", f"+{policy['extra_repayers_per_10k']:,.0f}", "per 10,000 applicants", delta_color="off")
-c4.metric("Real held-out applicants with no bureau record", f"{metrics['split']['test_no_bureau']:,}")
+def case_facts(row):
+    r = row.iloc[0]
+    job = "not employed or pensioner" if r["EMPLOYED_YEARS_MISSING"] == 1 else fmt("DAYS_EMPLOYED", r["DAYS_EMPLOYED"])
+    return [
+        ("Loan requested", fmt("AMT_CREDIT", r["AMT_CREDIT"])),
+        ("Declared income", fmt("AMT_INCOME_TOTAL", r["AMT_INCOME_TOTAL"])),
+        ("Monthly repayment", fmt("AMT_ANNUITY", r["AMT_ANNUITY"])),
+        ("Repayment burden", fmt("ANNUITY_TO_INCOME", r["ANNUITY_TO_INCOME"])),
+        ("Term", fmt("TERM_MONTHS", r["TERM_MONTHS"])),
+        ("Time in job", job),
+        ("Occupation", fmt("OCCUPATION_TYPE", r["OCCUPATION_TYPE"])),
+        ("Education", fmt("NAME_EDUCATION_TYPE", r["NAME_EDUCATION_TYPE"])),
+        ("Instalments paid to this lender", f"{r['INST_COUNT']:.0f}"),
+        ("Of those, paid late", fmt("INST_LATE_SHARE", r["INST_LATE_SHARE"])),
+    ]
 
-queue_tab, evidence_tab, how_tab = st.tabs(["Review queue", "Evidence", "How it works and limits"])
 
-# ---------------------------------------------------------------- queue
-with queue_tab:
-    st.info(
-        "Demo profiles are **synthetic**: each is stitched together from parts of different training applicants and "
-        "jittered, because the Home Credit data may not be redistributed. No profile is a real person. "
-        "Every number on the Evidence tab comes from real held-out applicants.",
-        icon="ℹ️",
-    )
-    if "decisions" not in st.session_state:
-        st.session_state.decisions = []
+def reasons_chart(row, key):
+    reasons = model.reasons(row)
+    reasons["shown"] = [f"{l}: {fmt(f, v)}" for l, f, v in zip(reasons["label"], reasons["feature"], reasons["value"])]
+    reasons = reasons.sort_values("contribution")
+    fig = go.Figure(go.Bar(
+        x=reasons["contribution"], y=reasons["shown"], orientation="h",
+        marker_color=[ui.APPROVE if c < 0 else ui.DECLINE for c in reasons["contribution"]],
+        hovertemplate="%{y}<br>effect %{x:+.2f}<extra></extra>",
+    ))
+    fig.update_layout(height=330, xaxis_title="Pushes risk down ←   → pushes risk up", showlegend=False,
+                      margin=dict(l=10, r=10, t=10, b=40))
+    st.plotly_chart(fig, key=key)
 
-    view = profiles.copy()
-    view["External"] = [verdict(r, baseline.threshold) for r in view["risk_baseline"]]
-    view["Second Look"] = [verdict(r, model.threshold) for r in view["risk_second_look"]]
-    reasons_order = ["Second look: approve", "Second look: caution", "Both approve", "Both decline"]
-    pick_filter = st.multiselect("Show", reasons_order, default=reasons_order[:2])
-    view = view[view["queue_reason"].isin(pick_filter)]
-    view = view.assign(_order=view["queue_reason"].map(reasons_order.index)).sort_values(["_order", "profile_id"])
 
-    left, right = st.columns([5, 6], gap="large")
-    with left:
-        table = view[["profile_id", "queue_reason", "AMT_CREDIT", "AMT_INCOME_TOTAL", "External", "Second Look"]]
-        table = table.rename(columns={"profile_id": "Profile", "queue_reason": "Why in queue", "AMT_CREDIT": "Loan", "AMT_INCOME_TOTAL": "Income"})
-        st.dataframe(table, hide_index=True, width="stretch", height=520,
-                     column_config={"Loan": st.column_config.NumberColumn(format="%d"), "Income": st.column_config.NumberColumn(format="%d")})
-    with right:
-        if view.empty:
-            st.write("Nothing matches this filter.")
-            st.stop()
-        pid = st.selectbox("Open profile", view["profile_id"])
-        row = profiles[profiles["profile_id"] == pid].reset_index(drop=True)
-        r_base, r_sl = float(row["risk_baseline"][0]), float(row["risk_second_look"][0])
-
-        a, b = st.columns(2)
-        a.metric("External score: default risk", f"{r_base:.1%}", verdict(r_base, baseline.threshold), delta_color="off")
-        b.metric("Second Look: default risk", f"{r_sl:.1%}", verdict(r_sl, model.threshold), delta_color="off")
-        st.caption(
-            f"Approval cut-offs: external score ≤ {baseline.threshold:.1%}, Second Look ≤ {model.threshold:.1%}. "
-            "Both are set so that approved applicants default at the same rate on real test data."
+def offer_slip(row):
+    rc = model.recourse(row)
+    if rc is None:
+        st.markdown('<div class="sl-slip clear">Within Second Look\'s cut-off as applied for. No counter-offer needed.</div>',
+                    unsafe_allow_html=True)
+    elif rc["found"]:
+        parts = []
+        if rc["amount_factor"] < 1:
+            parts.append(f"a loan of <b>{rc['new_credit']:,.0f}</b> instead of {float(row['AMT_CREDIT'].iloc[0]):,.0f}")
+        if rc["term_factor"] != 1:
+            parts.append(f"a <b>{rc['new_term_months']:.0f}-month</b> term (repayment {rc['new_annuity']:,.0f} a month)")
+        st.markdown(
+            f'<div class="sl-slip"><b>Counter-offer:</b> {" and ".join(parts)} brings risk to <b>{rc["new_risk"]:.1%}</b>, '
+            "inside the cut-off.<br><span class='sl-note'>Only loan terms change, never who the applicant is. "
+            "This describes what the model responds to, not a promise of repayment.</span></div>",
+            unsafe_allow_html=True,
         )
+    else:
+        st.markdown('<div class="sl-slip none">No loan amount or term within ±50% brings this applicant inside the cut-off.</div>',
+                    unsafe_allow_html=True)
 
-        reasons = model.reasons(row)
-        reasons["shown"] = [f"{l}: {fmt(f, v)}" for l, f, v in zip(reasons["label"], reasons["feature"], reasons["value"])]
-        reasons = reasons.sort_values("contribution")
-        fig = go.Figure(go.Bar(
-            x=reasons["contribution"], y=reasons["shown"], orientation="h",
-            marker_color=["#2e7d32" if c < 0 else "#c62828" for c in reasons["contribution"]],
-        ))
-        fig.update_layout(title="Why Second Look scored this way (red raises risk, green lowers it)",
-                          height=360, margin=dict(l=10, r=10, t=40, b=10), xaxis_title="Effect on risk (log-odds)")
-        st.plotly_chart(fig)
 
-        rc = model.recourse(row)
-        if rc is None:
-            st.success("Within Second Look's approval cut-off as applied for.")
-        elif rc["found"]:
-            changes = []
-            if rc["amount_factor"] < 1:
-                changes.append(f"a loan of **{rc['new_credit']:,.0f}** instead of {float(row['AMT_CREDIT'][0]):,.0f}")
-            if rc["term_factor"] != 1:
-                changes.append(f"a term of **{rc['new_term_months']:.0f} months** (monthly repayment {rc['new_annuity']:,.0f})")
-            st.warning(
-                "**Counter-offer:** " + " and ".join(changes) + f" brings risk to {rc['new_risk']:.1%}, inside the cut-off. "
-                "This describes what the model responds to; it changes only loan terms, never who the applicant is."
-            )
-        else:
-            st.error("No counter-offer within ±50% of the loan amount and term brings this applicant inside the cut-off.")
+# ---------------------------------------------------------------- masthead
+st.markdown(
+    f"""
+<div class="sl-mast">
+  <div>
+    <h1>🔎 Second Look</h1>
+    <p>One in seven applicants has no credit bureau record, and the external credit score judges them worst.
+    Second Look re-reads their file from the application and the lender's own repayment records,
+    explains itself, and leaves the decision to a loan officer.</p>
+  </div>
+  {ui.ledger([
+      ("Ranking quality (AUC), vs external score", f"{nb['auc']['second_look']['auc']:.3f} vs {nb['auc']['baseline']['auc']:.3f}"),
+      ("Extra approvals per 10,000, no higher default rate", f"+{policy['extra_approved_per_10k']:,.0f}"),
+      ("Of whom actually repaid", f"+{policy['extra_repayers_per_10k']:,.0f}"),
+      ("Real test applicants without a bureau record", f"{metrics['split']['test_no_bureau']:,}"),
+  ])}
+</div>
+""",
+    unsafe_allow_html=True,
+)
 
-        with st.expander("What if the loan terms change?"):
-            amount = st.slider("Loan amount, % of requested", 40, 120, 100, 5, key=f"amt_{pid}")
-            term = st.slider("Term, % of requested", 50, 200, 100, 5, key=f"term_{pid}")
+desk, trial, evidence, fair_tab, how = st.tabs(["Case desk", "Try an applicant", "Evidence", "Fairness", "How it works"])
+
+# ---------------------------------------------------------------- case desk
+with desk:
+    st.markdown(
+        '<p class="sl-note">Cases are <b>synthetic</b>: each is stitched from parts of different training applicants and '
+        "jittered, because the Home Credit data may not be redistributed. Every figure in Evidence and Fairness comes from real "
+        "held-out applicants.</p>",
+        unsafe_allow_html=True,
+    )
+    left, right = st.columns([4, 7], gap="large")
+    with left:
+        st.subheader("Review queue")
+        groups = st.pills("Show", list(QUEUE_GROUPS), default=list(QUEUE_GROUPS)[:2], selection_mode="multi",
+                          format_func=QUEUE_GROUPS.get, label_visibility="collapsed")
+        view = profiles[profiles["queue_reason"].isin(groups or [])].copy()
+        view["_order"] = view["queue_reason"].map(list(QUEUE_GROUPS).index)
+        view = view.sort_values(["_order", "profile_id"])
+        if view.empty:
+            st.info("Pick at least one group above to fill the queue.")
+            st.stop()
+        short = {"Second look: approve": "flips to approve", "Second look: caution": "flips to caution",
+                 "Both approve": "both approve", "Both decline": "both decline"}
+        labels = {r.profile_id: f"**{r.profile_id}**  loan {r.AMT_CREDIT:,.0f}, {short[r.queue_reason]}" for r in view.itertuples()}
+        with st.container(height=560, border=True):
+            pid = st.radio("Open case", list(labels), format_func=labels.get, label_visibility="collapsed")
+        done = {d["profile"] for d in st.session_state.decisions}
+        st.caption(f"{len(done)} of {len(view)} cases decided this session.")
+
+    with right:
+        row = profiles[profiles["profile_id"] == pid].reset_index(drop=True)
+        rb, ok_b, rs, ok_s = score(row)
+        st.markdown(
+            f"""<div class="sl-case"><h3>Case {ui.esc(pid)}</h3>
+<div class="sub">{ui.esc(QUEUE_GROUPS[row['queue_reason'][0]])}. No credit bureau record.</div>
+{ui.facts(case_facts(row))}
+{ui.stamp_pair(rb, ok_b, rs, ok_s, baseline.threshold, model.threshold, fresh=True)}</div>""",
+            unsafe_allow_html=True,
+        )
+        file_tab, terms_tab, decide_tab = st.tabs(["Why", "Counter-offer and what-if", "Decide"])
+        with file_tab:
+            st.markdown('<p class="sl-note">Each bar is the exact contribution of one factor to Second Look\'s score '
+                        "(TreeSHAP). Blue lowers the risk, red raises it.</p>", unsafe_allow_html=True)
+            reasons_chart(row, key=f"reasons_{pid}")
+            with st.expander("Every field in this case"):
+                st.dataframe(pd.DataFrame([(config.LABELS.get(f, f), fmt(f, row[f][0])) for f in config.SECOND_LOOK_FEATURES],
+                                          columns=["Field", "Value"]), hide_index=True, width="stretch")
+        with terms_tab:
+            offer_slip(row)
+            st.markdown("**Try other terms**")
+            c1, c2 = st.columns(2)
+            amount = c1.slider("Loan amount, % of requested", 40, 120, 100, 5, key=f"amt_{pid}")
+            term = c2.slider("Term, % of requested", 50, 200, 100, 5, key=f"term_{pid}")
             what_if = row.copy()
             what_if["AMT_CREDIT"] = row["AMT_CREDIT"] * amount / 100
             what_if["AMT_ANNUITY"] = row["AMT_ANNUITY"] * (amount / 100) / (term / 100)
             add_ratios(what_if)
             r_new = float(model.risk(what_if)[0])
-            st.write(
-                f"Loan {float(what_if['AMT_CREDIT'][0]):,.0f}, {float(what_if['TERM_MONTHS'][0]):.0f} months, "
-                f"monthly repayment {float(what_if['AMT_ANNUITY'][0]):,.0f} → risk **{r_new:.1%}** "
-                f"({verdict(r_new, model.threshold)})"
+            ok_new = r_new <= model.threshold
+            st.markdown(
+                f"""<div class="sl-case" style="border-left-color:{ui.APPROVE if ok_new else ui.DECLINE}">
+{ui.facts([("Loan", f"{float(what_if['AMT_CREDIT'][0]):,.0f}"), ("Term", f"{float(what_if['TERM_MONTHS'][0]):.0f} months"),
+           ("Monthly repayment", f"{float(what_if['AMT_ANNUITY'][0]):,.0f}"), ("Second Look risk", f"{r_new:.1%}")])}
+<div class="sl-stamps"><div class="sl-stampbox"><div class="who">Second Look on these terms</div>{ui.stamp(ok_new)}</div></div></div>""",
+                unsafe_allow_html=True,
             )
+        with decide_tab:
+            with st.form(f"decide_{pid}", clear_on_submit=True):
+                choice = st.radio("Decision", ["Approve", "Approve with counter-offer", "Request documents", "Decline"], horizontal=True)
+                note = st.text_input("Reason (required, shared with the applicant if declined)")
+                if st.form_submit_button("Record decision", type="primary"):
+                    if not note.strip():
+                        st.error("Write a reason before recording a decision.")
+                    else:
+                        st.session_state.decisions.append({
+                            "time": datetime.now().strftime("%H:%M:%S"), "case": pid, "profile": pid, "decision": choice,
+                            "reason": note.strip(), "external_risk": round(rb, 4), "second_look_risk": round(rs, 4),
+                        })
+                        st.success(f"Recorded: {choice} for {pid}.")
+            if st.session_state.decisions:
+                log = pd.DataFrame(st.session_state.decisions).drop(columns="profile")
+                st.dataframe(log, hide_index=True, width="stretch")
+                st.download_button("Download decision log (CSV)", log.to_csv(index=False), "decision_log.csv", "text/csv")
+            else:
+                st.caption("Decisions you record appear here and can be downloaded as a CSV log.")
 
-        with st.expander("All fields for this profile"):
-            fields = pd.DataFrame(
-                [(config.LABELS.get(f, f), fmt(f, row[f][0])) for f in config.SECOND_LOOK_FEATURES],
-                columns=["Field", "Value"],
-            )
-            st.dataframe(fields, hide_index=True, width="stretch")
+# ---------------------------------------------------------------- try an applicant
+with trial:
+    st.subheader("Score an applicant of your own")
+    st.markdown('<p class="sl-note">Fill in the form and both decisions update as you type. Fields not shown take '
+                "typical values for no-bureau applicants.</p>", unsafe_allow_html=True)
+    template = profiles.iloc[[0]].copy().reset_index(drop=True)
+    for col in config.SECOND_LOOK_FEATURES + config.EXTERNAL:
+        if col in config.APP_CATEGORICAL:
+            template[col] = profiles[col].mode()[0]
+        else:
+            template[col] = profiles[col].median()
 
-        st.subheader("Officer decision")
-        with st.form(f"decide_{pid}", clear_on_submit=True):
-            choice = st.radio("Decision", ["Approve", "Approve with counter-offer", "Request documents", "Decline"], horizontal=True)
-            note = st.text_input("Reason (required, shared with the applicant if declined)")
-            if st.form_submit_button("Record decision"):
-                if not note.strip():
-                    st.error("Write a reason before recording a decision.")
-                else:
-                    st.session_state.decisions.append({
-                        "time": datetime.now().strftime("%H:%M:%S"), "profile": pid, "decision": choice, "reason": note.strip(),
-                        "external_risk": round(r_base, 4), "second_look_risk": round(r_sl, 4),
-                    })
-                    st.success(f"Recorded: {choice} for {pid}.")
-        if st.session_state.decisions:
-            log = pd.DataFrame(st.session_state.decisions)
-            st.dataframe(log, hide_index=True, width="stretch")
-            st.download_button("Download decision log (CSV)", log.to_csv(index=False), "decision_log.csv", "text/csv")
+    form_col, out_col = st.columns([5, 6], gap="large")
+    with form_col:
+        st.markdown("**The loan**")
+        a1, a2 = st.columns(2)
+        loan = a1.number_input("Loan amount", 25_000, 4_000_000, 450_000, 25_000)
+        months = a2.slider("Term (months)", 6, 60, 20)
+        income = a1.number_input("Declared income (same period as repayments)", 10_000, 2_000_000, 150_000, 10_000)
+        contract = a2.selectbox("Loan type", model.categories["NAME_CONTRACT_TYPE"])
+        st.markdown("**The person**")
+        b1, b2 = st.columns(2)
+        no_job = b2.checkbox("Pensioner or not employed")
+        job_years = b1.slider("Years in current job", 0.0, 30.0, 4.0, 0.5, disabled=no_job)
+        education = b1.selectbox("Education", model.categories["NAME_EDUCATION_TYPE"],
+                                 index=model.categories["NAME_EDUCATION_TYPE"].index("Secondary / secondary special"))
+        occupation = b2.selectbox("Occupation", model.categories["OCCUPATION_TYPE"],
+                                  index=model.categories["OCCUPATION_TYPE"].index("Laborers"))
+        st.markdown("**History with this lender**")
+        c1, c2 = st.columns(2)
+        paid = c1.slider("Instalments paid on earlier loans", 0, 150, 30)
+        late = c2.slider("Share of them paid late (%)", 0, 100, 5, disabled=paid == 0)
+        refused = c1.slider("Earlier applications refused (%)", 0, 100, 0)
+        ext2 = c2.slider("External credit score (0 = worst, 1 = best)", 0.0, 1.0, 0.5, 0.01)
+
+    app = template.copy()
+    app["AMT_CREDIT"], app["AMT_INCOME_TOTAL"] = float(loan), float(income)
+    app["AMT_ANNUITY"], app["AMT_GOODS_PRICE"] = loan / months, loan * 0.9
+    app["NAME_CONTRACT_TYPE"], app["NAME_EDUCATION_TYPE"], app["OCCUPATION_TYPE"] = contract, education, occupation
+    app["EMPLOYED_YEARS_MISSING"] = int(no_job)
+    app["DAYS_EMPLOYED"] = np.nan if no_job else -job_years * 365.25
+    app["NAME_INCOME_TYPE"] = "Pensioner" if no_job else template["NAME_INCOME_TYPE"][0]
+    app["INST_COUNT"] = paid
+    app["INST_LATE_SHARE"] = late / 100 if paid else np.nan
+    app["INST_MEAN_DAYS_LATE"] = (late / 100) * 8 if paid else np.nan
+    app["INST_UNDERPAID_SHARE"] = 0.0 if paid else np.nan
+    app["PREV_COUNT"] = max(1, round(paid / 12)) if paid or refused else 0
+    app["PREV_REFUSED_SHARE"] = refused / 100 if app["PREV_COUNT"][0] else np.nan
+    app["PREV_REFUSED"] = round(app["PREV_COUNT"][0] * refused / 100)
+    app["PREV_APPROVED"] = app["PREV_COUNT"] - app["PREV_REFUSED"]
+    app["EXT_SOURCE_1"], app["EXT_SOURCE_2"], app["EXT_SOURCE_3"] = np.nan, ext2, np.nan
+    add_ratios(app)
+
+    with out_col:
+        rb, ok_b, rs, ok_s = score(app)
+        st.markdown(
+            f"""<div class="sl-case"><h3>Your applicant</h3>
+<div class="sub">Loan {loan:,.0f} over {months} months, repayment {loan / months:,.0f} a month
+({loan / months / income:.0%} of declared income).</div>
+{ui.stamp_pair(rb, ok_b, rs, ok_s, baseline.threshold, model.threshold)}</div>""",
+            unsafe_allow_html=True,
+        )
+        reasons_chart(app, key="reasons_trial")
+        offer_slip(app)
 
 # ---------------------------------------------------------------- evidence
-with evidence_tab:
+with evidence:
     a = metrics["audit"]
     st.markdown(
-        f"Trained and tested on the **Home Credit Default Risk** data ({a['applicants']:,} real loans). "
-        f"**{a['no_bureau_applicants']:,} applicants ({a['no_bureau_share']:.1%}) have no credit bureau record**, and they default more often "
-        f"({a['no_bureau_default_rate']:.1%} vs {a['bureau_default_rate']:.1%}). Everything below is measured on a held-out 20% test split "
-        f"({metrics['split']['test']:,} applicants, {metrics['split']['test_no_bureau']:,} without a bureau record) that no model saw during training."
+        f"Trained and tested on **Home Credit Default Risk** ({a['applicants']:,} real loans). "
+        f"**{a['no_bureau_applicants']:,} applicants ({a['no_bureau_share']:.1%}) have no credit bureau record** and default more often "
+        f"({a['no_bureau_default_rate']:.1%} vs {a['bureau_default_rate']:.1%}). Everything here is measured on a 20% test split "
+        f"({metrics['split']['test']:,} applicants, {metrics['split']['test_no_bureau']:,} without a bureau record) that no model saw in training."
     )
-
-    st.subheader("1. Ranking quality on applicants with no bureau record")
-    names = {"baseline": "External score (baseline)", "application_only": "Second Look without lender history (ablation)",
-             "second_look": "Second Look", "combined": "Second Look + external score"}
-    rows = []
-    for key, label in names.items():
-        for pop in ("no_bureau", "all"):
-            v = metrics[pop]["auc"][key]
-            d = v.get("delta_vs_baseline")
-            rows.append({"Model": label, "Population": "No bureau record" if pop == "no_bureau" else "Everyone",
-                         "AUC": f"{v['auc']:.3f} ({v['ci_low']:.3f}–{v['ci_high']:.3f})",
-                         "Gain vs baseline (95% CI)": f"{d['mean']:+.3f} ({d['ci_low']:+.3f} to {d['ci_high']:+.3f})" if d else "—"})
-    st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
-    st.caption("95% intervals from 1,000 paired bootstrap resamples of the test set.")
-
-    st.subheader("2. What it means for lending decisions")
-    c = curves[(curves["population"] == "no_bureau") & curves["model"].isin(["baseline", "second_look"])].copy()
-    c["model"] = c["model"].map(names)
-    fig = px.line(c, x="approval_rate", y="bad_rate", color="model",
+    st.subheader("Set your own lending policy")
+    rate = st.slider("Approve this share of no-bureau applicants", 50, 99, 80, 1, format="%d%%")
+    c = curves[curves["population"] == "no_bureau"]
+    pick = c.iloc[(c["approval_rate"] - rate / 100).abs().groupby(c["model"]).idxmin()].set_index("model")
+    n_test = metrics["split"]["test_no_bureau"]
+    b_bad, s_bad = pick.loc["baseline", "bad_rate"], pick.loc["second_look", "bad_rate"]
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Defaults among approved, external score", f"{b_bad:.1%}")
+    m2.metric("Defaults among approved, Second Look", f"{s_bad:.1%}", f"{(s_bad - b_bad) * 100:+.1f} points", delta_color="inverse")
+    m3.metric("Fewer defaulted loans per 10,000 applicants", f"{(b_bad - s_bad) * rate / 100 * 10_000:,.0f}")
+    cc = c[c["model"].isin(["baseline", "second_look"])].copy()
+    cc["model"] = cc["model"].map(MODEL_NAMES)
+    fig = px.line(cc, x="approval_rate", y="bad_rate", color="model",
+                  color_discrete_map={MODEL_NAMES["baseline"]: ui.BASELINE, MODEL_NAMES["second_look"]: ui.APPROVE},
                   labels={"approval_rate": "Share of applicants approved", "bad_rate": "Default rate among approved", "model": ""})
-    fig.add_hline(y=policy["baseline_bad_rate"], line_dash="dot", annotation_text="Bad rate when the baseline approves 80%")
-    fig.update_layout(height=380, yaxis_tickformat=".0%", xaxis_tickformat=".0%", legend=dict(orientation="h", y=-0.25))
-    st.plotly_chart(fig)
+    fig.add_vline(x=rate / 100, line_dash="dot", line_color=ui.INK)
+    fig.update_traces(line_width=3)
+    fig.update_layout(height=380, yaxis_tickformat=".0%", xaxis_tickformat=".0%")
+    st.plotly_chart(fig, key="policy")
     st.markdown(
-        f"If the baseline approves 80% of no-bureau applicants, approved loans default at {policy['baseline_bad_rate']:.1%}. "
-        f"At that same default rate Second Look approves **{policy['model_approval_rate']:.1%}**: "
+        "The headline cut-offs are chosen on a separate validation split, never on these test applicants: the external score "
+        "approves 80%, and Second Look the largest share with no higher default rate. Applied to the test applicants, the external "
+        f"score approves {policy['baseline_approval_rate']:.1%} (defaults {policy['baseline_bad_rate']:.2%}) and Second Look "
+        f"**{policy['model_approval_rate']:.1%}** (defaults {policy['model_bad_rate']:.2%}): "
         f"**{policy['extra_approved_per_10k']:,.0f} more people per 10,000**, of whom **{policy['extra_repayers_per_10k']:,.0f} repaid**."
     )
-    ch = metrics["decision_changes_no_bureau"]
-    st.dataframe(pd.DataFrame([
-        {"Group": "Both approve", **ch["both_approve"]},
-        {"Group": "Only Second Look approves", **ch["second_look_only"]},
-        {"Group": "Only the external score approves", **ch["baseline_only"]},
-        {"Group": "Both decline", **ch["both_decline"]},
-    ]).rename(columns={"n": "Test applicants", "default_rate": "Actually defaulted"}).style.format({"Actually defaulted": "{:.1%}"}),
-        hide_index=True, width="stretch")
-    st.caption("The people Second Look adds default less often than the people it removes.")
 
-    st.subheader("3. Fairness audit")
-    st.markdown(
-        "Gender, age and family status are **not** model inputs, but proxies can leak in, so approval rates are audited per group "
-        "at each model's cut-off. *Repayer approval rate* is the share of people who actually repaid that got approved (equal opportunity)."
-    )
-    f = fairness.copy()
-    f["model"] = f["model"].map(names)
-    piv = f.pivot_table(index=["attribute", "group"], columns="model", values=["approval_rate", "repayer_approval_rate"])
-    piv.columns = [f"{m}: {'approval' if v == 'approval_rate' else 'repayer approval'}" for v, m in piv.columns]
-    st.dataframe(piv.style.format("{:.1%}"), width="stretch")
-    gaps = pd.DataFrame(metrics["fairness_gaps"])
-    gaps["model"] = gaps["model"].map(names)
-    gaps = gaps.rename(columns={"model": "Model", "attribute": "Attribute", "approval_gap": "Largest approval gap",
-                                "repayer_approval_gap": "Largest repayer approval gap"})
-    st.dataframe(gaps.style.format({"Largest approval gap": "{:.1%}", "Largest repayer approval gap": "{:.1%}"}),
+    st.subheader("Ranking quality")
+    rows = []
+    for key, label in MODEL_NAMES.items():
+        for pop, pop_label in (("no_bureau", "No bureau record"), ("all", "Everyone")):
+            v = metrics[pop]["auc"][key]
+            d = v.get("delta_vs_baseline")
+            rows.append({"Model": label, "Applicants": pop_label, "AUC": v["auc"], "low": v["ci_low"], "high": v["ci_high"],
+                         "Gain vs external score (95% CI)": f"{d['mean']:+.3f} ({d['ci_low']:+.3f} to {d['ci_high']:+.3f})" if d else "reference"})
+    auc = pd.DataFrame(rows)
+    fig = go.Figure()
+    for pop_label, color in (("No bureau record", ui.APPROVE), ("Everyone", ui.BASELINE)):
+        part = auc[auc["Applicants"] == pop_label]
+        fig.add_trace(go.Scatter(x=part["AUC"], y=part["Model"], mode="markers", name=pop_label, marker=dict(size=13, color=color),
+                                 error_x=dict(type="data", symmetric=False, array=part["high"] - part["AUC"],
+                                              arrayminus=part["AUC"] - part["low"], color=color, thickness=2)))
+    fig.update_layout(height=300, xaxis_title="AUC with 95% bootstrap interval (higher ranks risk better)")
+    st.plotly_chart(fig, key="auc")
+    st.dataframe(auc[["Model", "Applicants", "AUC", "Gain vs external score (95% CI)"]].style.format({"AUC": "{:.3f}"}),
                  hide_index=True, width="stretch")
-    st.warning(
-        "Every gender and age group is approved more often under Second Look, but the **age gap widens** "
-        "because almost all over-60s are approved (the model rewards pensioner income stability). "
-        "The gender gap is about one point wider. A lender would need to review this before deployment."
-    )
-
-    st.subheader("4. What drives the model")
-    imp = pd.DataFrame(metrics["importance"]).sort_values("mean_abs_contribution")
-    fig = px.bar(imp, x="mean_abs_contribution", y="label", orientation="h",
-                 labels={"mean_abs_contribution": "Mean absolute effect on risk (log-odds)", "label": ""})
-    fig.update_layout(height=460)
-    st.plotly_chart(fig)
-    st.markdown(
-        f"The ablation shows where the gain comes from: without the lender's own history, the AUC gain over the baseline drops from "
+    st.caption(
+        f"The ablation shows where the gain comes from: without the lender's own history the gain falls from "
         f"{nb['auc']['second_look']['delta_vs_baseline']['mean']:+.3f} to {nb['auc']['application_only']['delta_vs_baseline']['mean']:+.3f}. "
-        f"{a['no_bureau_with_lender_history']:.0%} of no-bureau applicants have earlier applications with this lender."
+        f"{a['no_bureau_with_lender_history']:.0%} of no-bureau applicants had applied to this lender before."
     )
 
-# ---------------------------------------------------------------- how
-with how_tab:
+    st.subheader("Who changes decision, and how they actually did")
+    ch = metrics["decision_changes_no_bureau"]
+    order = [("both_approve", "Both approve"), ("second_look_only", "Only Second Look approves"),
+             ("baseline_only", "Only the external score approves"), ("both_decline", "Both decline")]
+    dc = pd.DataFrame([{"Group": lbl, "Applicants": ch[k]["n"], "Defaulted": ch[k]["default_rate"]} for k, lbl in order])
+    fig = px.bar(dc, x="Defaulted", y="Group", orientation="h", text=dc["Defaulted"].map("{:.1%}".format),
+                 color="Group", color_discrete_sequence=[ui.INK, ui.APPROVE, ui.BASELINE, ui.DECLINE],
+                 hover_data={"Applicants": True})
+    fig.update_layout(height=260, showlegend=False, xaxis_tickformat=".0%", xaxis_title="Share who defaulted", yaxis_title="")
+    st.plotly_chart(fig, key="changes")
+    st.caption("The people Second Look adds default less often than the people it drops.")
+
+    st.subheader("What drives the model")
+    imp = pd.DataFrame(metrics["importance"]).sort_values("mean_abs_contribution")
+    fig = px.bar(imp, x="mean_abs_contribution", y="label", orientation="h", color_discrete_sequence=[ui.INK],
+                 labels={"mean_abs_contribution": "Average effect on risk", "label": ""})
+    fig.update_layout(height=440)
+    st.plotly_chart(fig, key="importance")
+
+# ---------------------------------------------------------------- fairness
+with fair_tab:
+    st.subheader("Approval rates by group")
+    st.markdown(
+        "Gender, age and family status are **not** model inputs, but proxies can leak in, so every group is audited at each model's cut-off "
+        "on real no-bureau test applicants."
+    )
+    measure = st.segmented_control(
+        "Measure", ["Approval rate", "Approval rate among people who repaid"], default="Approval rate", label_visibility="collapsed")
+    col = "repayer_approval_rate" if measure and measure.startswith("Approval rate among") else "approval_rate"
+    f = fairness.copy()
+    f["model"] = f["model"].map(MODEL_NAMES)
+    f["attribute"] = f["attribute"].map({"CODE_GENDER": "Gender", "AGE_BAND": "Age"})
+    f["group"] = f["group"].replace({"F": "Women", "M": "Men", "<30": "Under 30", "30-44": "30 to 44", "45-59": "45 to 59", "60+": "60 and over"})
+    group_order = ["Women", "Men", "Under 30", "30 to 44", "45 to 59", "60 and over"]
+    fig = px.bar(f, x="group", y=col, color="model", barmode="group", text=f[col].map("{:.0%}".format),
+                 category_orders={"group": group_order},
+                 color_discrete_map={MODEL_NAMES["baseline"]: ui.BASELINE, MODEL_NAMES["second_look"]: ui.APPROVE},
+                 labels={"group": "", col: measure or "Approval rate", "model": ""})
+    fig.update_layout(height=400, yaxis_tickformat=".0%", yaxis_range=[0, 1.08])
+    st.plotly_chart(fig, key="fairness")
+    gaps = pd.DataFrame(metrics["fairness_gaps"])
+    g1, g2 = st.columns(2)
+    for colm, attr, label in ((g1, "AGE_BAND", "Age"), (g2, "CODE_GENDER", "Gender")):
+        b = gaps[(gaps["model"] == "baseline") & (gaps["attribute"] == attr)]["approval_gap"].iloc[0]
+        s = gaps[(gaps["model"] == "second_look") & (gaps["attribute"] == attr)]["approval_gap"].iloc[0]
+        colm.metric(f"Largest {label.lower()} gap in approval rate, Second Look", f"{s:.1%}",
+                    f"{(s - b) * 100:+.1f} points vs external score", delta_color="inverse")
+    st.warning(
+        "Every group is approved more often under Second Look, but the **age gap widens**, mostly because almost all over-60s "
+        "are approved (the model rewards pensioners' steady income). The gender gap widens by under one point. "
+        "A lender would need to address this before using it."
+    )
+
+# ---------------------------------------------------------------- how it works
+with how:
+    st.subheader("How a case gets its second look")
     st.markdown(
         """
-### Pipeline
-1. **Data**: Home Credit Default Risk (Kaggle): application form, earlier applications with the lender, and instalment repayment history.
+1. **Data.** Home Credit Default Risk (Kaggle): the application form, earlier applications with the lender, and instalment repayment history.
    Applicants with no rows in the credit bureau table form the *no-bureau* group.
-2. **Baseline**: logistic regression on the three external scores (`EXT_SOURCE_1/2/3`), standing in for the opaque score a lender buys.
-3. **Second Look**: LightGBM on application fields, affordability ratios and the lender's own history.
+2. **Baseline.** Logistic regression on the three external scores (`EXT_SOURCE_1/2/3`), standing in for the score a lender buys.
+3. **Second Look.** LightGBM on application fields, affordability ratios and the lender's own history.
    It never sees the external scores, bureau enquiries, gender, age or family status.
-   Monotone constraints force common-sense directions (more late payments can never lower risk).
-4. **Cut-offs**: the baseline approves 80% of no-bureau applicants; Second Look's cut-off is the most generous one with the same default rate.
-5. **Explanations**: exact per-feature contributions from the tree model (TreeSHAP via LightGBM `pred_contrib`), turned into plain-English reasons.
-6. **Counter-offers**: a search over loan amount (50–100%) and term (75–150%) for the smallest change that reaches the cut-off.
-7. **Human in the loop**: the officer records a decision and a reason for every case; the log is exportable.
-
-### Limits, stated plainly
-- **Selection bias.** Home Credit only shows outcomes for people it lent to. Rejected applicants never got a loan, so their repayment is unknown.
-  Claims here are about *approved borrowers without a bureau record*, not about the unbanked population as a whole.
-- **Not Indian data.** The lender and market are not disclosed, so results do not transfer to India without retraining on local data.
-- **Lender history matters.** 94% of no-bureau applicants had applied to this lender before; for true first-time borrowers the gain is smaller (see the ablation).
-- **Age gap.** Second Look widens the approval gap between age bands (see the fairness audit).
+   Monotone constraints keep it sensible: more late payments can never lower risk.
+4. **Cut-offs.** The external score approves 80% of no-bureau applicants; Second Look's cut-off is the most generous one with the same default rate.
+5. **Explanations.** Exact per-factor contributions from the tree model (TreeSHAP via LightGBM `pred_contrib`), written in plain English.
+6. **Counter-offers.** A search over loan amount (50 to 100%) and term (75 to 150%) for the smallest change that reaches the cut-off.
+7. **People decide.** The officer records a decision and a reason for every case, in an exportable log.
+"""
+    )
+    st.subheader("Limits, stated plainly")
+    st.markdown(
+        """
+- **Selection bias.** Home Credit only knows outcomes for people it lent to, so claims are about *approved borrowers without a bureau record*, not every unbanked person.
+- **Not Indian data.** The lender and market are not disclosed; results need retraining on local data before they transfer.
+- **Lender history matters.** 94% of no-bureau applicants had applied to this lender before. For true first-time borrowers the gain is smaller.
+- **Age gap.** Second Look widens it (see Fairness).
 - **Counter-offers are correlational.** They describe what the model responds to, not a guarantee of repayment.
-- **Overall population.** For applicants who do have a bureau record, Second Look is only on par with the external score; it is a second opinion for thin files, not a replacement.
+- **Thin files only.** For applicants with a bureau record, Second Look only matches the external score.
 
-### Responsible use
-Second Look recommends; it does not decide. It is a hackathon prototype, not a validated credit model, and must not be used for real lending decisions.
+Second Look recommends; it does not decide. It is a hackathon prototype, not a validated credit model, and is not for real lending decisions.
 """
     )

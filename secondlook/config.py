@@ -91,7 +91,7 @@ MONOTONE = {
 
 # Plain-English names for reason codes.
 LABELS = {
-    "AMT_INCOME_TOTAL": "Declared annual income",
+    "AMT_INCOME_TOTAL": "Declared income",
     "AMT_CREDIT": "Loan amount",
     "AMT_ANNUITY": "Monthly repayment",
     "AMT_GOODS_PRICE": "Price of goods financed",
