@@ -38,6 +38,17 @@ model, baseline = load_models()
 metrics, profiles, curves, fairness = load_artifacts()
 nb = metrics["no_bureau"]
 policy = nb["policy_holdout"]["second_look"]  # cut-offs fixed on validation, outcomes measured on test
+first = metrics["first_time"]
+
+
+def first_time_note(row) -> str:
+    """Second Look adds nothing measurable for applicants with no history at this lender, so say so on the case."""
+    if row["PREV_COUNT"][0] > 0:
+        return ""
+    fa = first["auc"]
+    return (f'<p class="sl-note"><b>First-time borrower:</b> no history with this lender either. On such applicants Second Look '
+            f'ranks no better than the external score (AUC {fa["second_look"]["auc"]:.2f} vs {fa["baseline"]["auc"]:.2f}), '
+            "so treat this as a standard review.</p>")
 MODEL_NAMES = {
     "baseline": "External credit score",
     "application_only": "Second Look without lender history",
@@ -194,7 +205,8 @@ with desk:
             f"""<div class="sl-case"><h3>Case {ui.esc(pid)}</h3>
 <div class="sub">{ui.esc(QUEUE_GROUPS[row['queue_reason'][0]])}. No credit bureau record.</div>
 {ui.facts(case_facts(row))}
-{ui.stamp_pair(rb, ok_b, rs, ok_s, baseline.threshold, model.threshold, fresh=True)}</div>""",
+{ui.stamp_pair(rb, ok_b, rs, ok_s, baseline.threshold, model.threshold, fresh=True)}
+{first_time_note(row)}</div>""",
             unsafe_allow_html=True,
         )
         file_tab, terms_tab, decide_tab = st.tabs(["Why", "Counter-offer and what-if", "Decide"])
@@ -303,7 +315,8 @@ with trial:
             f"""<div class="sl-case"><h3>Your applicant</h3>
 <div class="sub">Loan {loan:,.0f} over {months} months, repayment {loan / months:,.0f} a month
 ({loan / months / income:.0%} of declared income).</div>
-{ui.stamp_pair(rb, ok_b, rs, ok_s, baseline.threshold, model.threshold)}</div>""",
+{ui.stamp_pair(rb, ok_b, rs, ok_s, baseline.threshold, model.threshold)}
+{first_time_note(app)}</div>""",
             unsafe_allow_html=True,
         )
         reasons_chart(app, key="reasons_trial")
@@ -342,7 +355,9 @@ with evidence:
         "approves 80%, and Second Look the largest share with no higher default rate. Applied to the test applicants, the external "
         f"score approves {policy['baseline_approval_rate']:.1%} (defaults {policy['baseline_bad_rate']:.2%}) and Second Look "
         f"**{policy['model_approval_rate']:.1%}** (defaults {policy['model_bad_rate']:.2%}): "
-        f"**{policy['extra_approved_per_10k']:,.0f} more people per 10,000**, of whom **{policy['extra_repayers_per_10k']:,.0f} repaid**."
+        f"**{policy['extra_approved_per_10k']:,.0f} more people per 10,000** "
+        f"(95% CI {policy['extra_approved_ci'][0]:,.0f} to {policy['extra_approved_ci'][1]:,.0f}), "
+        f"of whom **{policy['extra_repayers_per_10k']:,.0f} repaid** ({policy['extra_repayers_ci'][0]:,.0f} to {policy['extra_repayers_ci'][1]:,.0f})."
     )
 
     st.subheader("Ranking quality")
@@ -368,6 +383,20 @@ with evidence:
         f"The ablation shows where the gain comes from: without the lender's own history the gain falls from "
         f"{nb['auc']['second_look']['delta_vs_baseline']['mean']:+.3f} to {nb['auc']['application_only']['delta_vs_baseline']['mean']:+.3f}. "
         f"{a['no_bureau_with_lender_history']:.0%} of no-bureau applicants had applied to this lender before."
+    )
+
+    st.subheader("Who it helps, and who it doesn't")
+    fa, fp = first["auc"], first["policy_holdout"]
+    st.markdown(
+        f"The gain comes from the lender's own records. **{a['no_bureau_with_lender_history']:.0%} of no-bureau applicants** had "
+        "applied here before, and for them Second Look reads repayment behaviour the external score never sees. "
+        f"For the **{first['n']:,} true first-time borrowers** in the test set (no bureau record *and* no history with this lender), "
+        f"it ranks no better: AUC {fa['second_look']['auc']:.3f} vs {fa['baseline']['auc']:.3f} "
+        f"(difference {fa['second_look']['delta_vs_baseline']['mean']:+.3f}, 95% CI {fa['second_look']['delta_vs_baseline']['ci_low']:+.3f} "
+        f"to {fa['second_look']['delta_vs_baseline']['ci_high']:+.3f}), and its cut-off approves more of them "
+        f"({fp['model_approval_rate']:.0%} vs {fp['baseline_approval_rate']:.0%}) at a higher default rate "
+        f"({fp['model_bad_rate']:.1%} vs {fp['baseline_bad_rate']:.1%}). "
+        "So the app flags first-time borrowers on the case card and tells the officer to treat them as a standard review."
     )
 
     st.subheader("Who changes decision, and how they actually did")
@@ -419,8 +448,32 @@ with fair_tab:
                     f"{(s - b) * 100:+.1f} points vs external score", delta_color="inverse")
     st.warning(
         "Every group is approved more often under Second Look, but the **age gap widens**, mostly because almost all over-60s "
-        "are approved (the model rewards pensioners' steady income). The gender gap widens by under one point. "
-        "A lender would need to address this before using it."
+        "are approved. The gender gap widens by under one point. Below is what closing the age gap would cost."
+    )
+
+    st.subheader("What closing the age gap costs")
+    opts = pd.DataFrame(metrics["fairness_options"])
+    by_age = pd.DataFrame(list(opts["approval_by_age"]))
+    table = pd.DataFrame({
+        "Policy": opts["option"],
+        "Approved": opts["approval_rate"].map("{:.1%}".format),
+        "Defaults among approved": opts["bad_rate"].map("{:.2%}".format),
+        "Extra approvals per 10,000": opts["extra_approved_per_10k"].map("{:+,.0f}".format),
+        "Age gap": (opts["age_gap"] * 100).map("{:.1f} pts".format),
+        "Under 30": by_age["<30"].map("{:.0%}".format),
+        "60 and over": by_age["60+"].map("{:.0%}".format),
+    })
+    st.dataframe(table, hide_index=True, width="stretch")
+    sl_opt, np_opt, par_opt = (opts.set_index("option").loc[k] for k in
+                               ("Second Look", "Second Look without pension signals", "Second Look, equal approval rate by age"))
+    st.markdown(
+        f"- **Removing the age proxies does not help.** Retrained without income type and employment fields, the gap is still "
+        f"{np_opt['age_gap'] * 100:.1f} points: older applicants in this data genuinely default less, so any accurate model favours them.\n"
+        f"- **Equal approval rates by age close it** to {par_opt['age_gap'] * 100:.1f} points at the same default rate, but Second Look then adds "
+        f"{par_opt['extra_approved_per_10k']:,.0f} approvals per 10,000 instead of {sl_opt['extra_approved_per_10k']:,.0f}. "
+        "Each age band gets its own cut-off, chosen on validation data.\n"
+        "- **The choice belongs to the lender.** Using age at the decision step is regulated in many places and needs legal review. "
+        "Second Look shows the trade-off; it does not make it."
     )
 
 # ---------------------------------------------------------------- how it works
@@ -434,7 +487,7 @@ with how:
 3. **Second Look.** LightGBM on application fields, affordability ratios and the lender's own history.
    It never sees the external scores, bureau enquiries, gender, age or family status.
    Monotone constraints keep it sensible: more late payments can never lower risk.
-4. **Cut-offs.** The external score approves 80% of no-bureau applicants; Second Look's cut-off is the most generous one with the same default rate.
+4. **Cut-offs.** Chosen on a validation split, never on test. The external score approves 80% of no-bureau applicants; Second Look's cut-off is the most generous one with no higher default rate.
 5. **Explanations.** Exact per-factor contributions from the tree model (TreeSHAP via LightGBM `pred_contrib`), written in plain English.
 6. **Counter-offers.** A search over loan amount (50 to 100%) and term (75 to 150%) for the smallest change that reaches the cut-off.
 7. **People decide.** The officer records a decision and a reason for every case, in an exportable log.
@@ -445,8 +498,8 @@ with how:
         """
 - **Selection bias.** Home Credit only knows outcomes for people it lent to, so claims are about *approved borrowers without a bureau record*, not every unbanked person.
 - **Not Indian data.** The lender and market are not disclosed; results need retraining on local data before they transfer.
-- **Lender history matters.** 94% of no-bureau applicants had applied to this lender before. For true first-time borrowers the gain is smaller.
-- **Age gap.** Second Look widens it (see Fairness).
+- **Lender history matters.** 94% of no-bureau applicants had applied to this lender before. For true first-time borrowers there is no measurable gain, and the app says so on the case.
+- **Age gap.** Second Look widens it; closing it costs about a third of the extra approvals (see Fairness).
 - **Counter-offers are correlational.** They describe what the model responds to, not a guarantee of repayment.
 - **Thin files only.** For applicants with a bureau record, Second Look only matches the external score.
 

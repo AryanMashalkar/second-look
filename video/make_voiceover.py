@@ -47,9 +47,12 @@ SCENES = [
     ("trial", "There's also a tab to score any applicant you like. "
               "Change the loan, the job or the repayment history, and both decisions update as you go."),
     ("evidence", "The Evidence tab shows the receipts. Pick any approval rate, and Second Look's approved group defaults less often. "
-                 "Every number comes from real held-out applicants, with confidence intervals."),
+                 "Every number comes from real held-out applicants, with confidence intervals. "
+                 "And it says where it doesn't help: for true first-time borrowers it's no better than the score, and the case card says so."),
     ("fairness", "Gender and age are not inputs, but we audit them anyway. "
-                 "Every group gets approved more often. The age gap does get wider, and we report that instead of hiding it."),
+                 "Every group gets approved more often, but the age gap gets wider. "
+                 "So we show what closing it costs: equal approval rates by age bring the gap down to four points, "
+                 "for about a third fewer extra approvals. That choice stays with the lender."),
     ("close", "Second Look. Built in forty-eight hours with LightGBM and Streamlit, on real Home Credit data. "
               "The code, the tests and every metric are on GitHub. Thanks for watching."),
 ]

@@ -101,6 +101,31 @@ def fixed_policy(y, baseline_risk, model_risk, baseline_thr: float, model_thr: f
     }
 
 
+def bootstrap_policy(y, baseline_ok, model_ok, n_boot=1000, seed=0) -> dict:
+    """95% CIs for extra approvals and extra repayers per 10,000 under fixed decisions."""
+    y, b, m = np.asarray(y), np.asarray(baseline_ok), np.asarray(model_ok)
+    n = len(y)
+    idx = np.random.default_rng(seed).integers(0, n, (n_boot, n))
+    extra = (m[idx].sum(1) - b[idx].sum(1)) * 10_000 / n
+    repaid = ((m[idx] & (y[idx] == 0)).sum(1) - (b[idx] & (y[idx] == 0)).sum(1)) * 10_000 / n
+    return {
+        "extra_approved_ci": [float(np.percentile(extra, 2.5)), float(np.percentile(extra, 97.5))],
+        "extra_repayers_ci": [float(np.percentile(repaid, 2.5)), float(np.percentile(repaid, 97.5))],
+    }
+
+
+def parity_cutoffs(risk, groups, y, max_bad_rate: float) -> dict:
+    """Per-group cut-offs that approve every group at the same rate, as high as the bad-rate limit allows."""
+    risk, groups, y = np.asarray(risk), np.asarray(groups), np.asarray(y)
+    best = None
+    for rate in np.arange(0.50, 0.995, 0.0025):
+        thr = {g: float(np.quantile(risk[groups == g], rate)) for g in np.unique(groups)}
+        ok = risk <= np.array([thr[g] for g in groups])
+        if y[ok].mean() <= max_bad_rate + 1e-12:
+            best = (float(rate), thr)
+    return {"rate": best[0], "thresholds": best[1]}
+
+
 def threshold_for_rate(risk, rate: float) -> float:
     """Risk cut-off that approves `rate` of this population."""
     return float(np.quantile(np.asarray(risk), rate))

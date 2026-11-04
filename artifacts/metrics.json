@@ -98,7 +98,15 @@
     "model_approval_rate": 0.8658564288959564,
     "model_bad_rate": 0.07700380427653154,
     "extra_approved_per_10k": 688.323489323035,
-    "extra_repayers_per_10k": 636.0745115856429
+    "extra_repayers_per_10k": 636.0745115856429,
+    "extra_approved_ci": [
+     590.6406179009541,
+     786.0063607451159
+    ],
+    "extra_repayers_ci": [
+     548.614266242617,
+     729.2423898228078
+    ]
    },
    "combined": {
     "baseline_approval_rate": 0.7970240799636529,
@@ -187,6 +195,50 @@
   "second_look": 0.16910058174875484,
   "combined": 0.19492808745594717
  },
+ "first_time": {
+  "n": 472,
+  "default_rate": 0.0826271186440678,
+  "auc": {
+   "baseline": {
+    "auc": 0.7511695386984071,
+    "ci_low": 0.6575568959899253,
+    "ci_high": 0.8353022176271099,
+    "brier": 0.07013338834313279
+   },
+   "second_look": {
+    "auc": 0.7559661277906082,
+    "ci_low": 0.6812612612612612,
+    "ci_high": 0.8187425989858758,
+    "brier": 0.07116338492707086,
+    "delta_vs_baseline": {
+     "mean": 0.004796589092201153,
+     "ci_low": -0.08509453861979917,
+     "ci_high": 0.09363408846862785,
+     "share_positive": 0.529
+    }
+   },
+   "application_only": {
+    "auc": 0.7440042636347486,
+    "ci_low": 0.6628214804366476,
+    "ci_high": 0.8109066959860161,
+    "brier": 0.07179882662054678,
+    "delta_vs_baseline": {
+     "mean": -0.007165275063658494,
+     "ci_low": -0.09876265810692063,
+     "ci_high": 0.08254424708904155,
+     "share_positive": 0.441
+    }
+   }
+  },
+  "policy_holdout": {
+   "baseline_approval_rate": 0.8305084745762712,
+   "baseline_bad_rate": 0.05357142857142857,
+   "model_approval_rate": 0.9491525423728814,
+   "model_bad_rate": 0.07366071428571429,
+   "extra_approved_per_10k": 1186.4406779661017,
+   "extra_repayers_per_10k": 932.2033898305084
+  }
+ },
  "decision_changes_no_bureau": {
   "both_approve": {
    "n": 6302,
@@ -231,6 +283,81 @@
    "repayer_approval_gap": 0.054299324060410714
   }
  ],
+ "fairness_options": [
+  {
+   "option": "External credit score",
+   "auc": 0.6733008220855224,
+   "approval_rate": 0.7970240799636529,
+   "bad_rate": 0.07709847513182272,
+   "extra_approved_per_10k": 0.0,
+   "extra_repayers_per_10k": 0.0,
+   "age_gap": 0.17642806275491485,
+   "gender_gap": 0.058902282891260316,
+   "approval_by_age": {
+    "30-44": 0.7997461123452873,
+    "45-59": 0.8531618435155413,
+    "60+": 0.8433395872420263,
+    "<30": 0.6767337807606264
+   }
+  },
+  {
+   "option": "Second Look",
+   "auc": 0.7257196421862162,
+   "approval_rate": 0.8658564288959564,
+   "bad_rate": 0.07700380427653154,
+   "extra_approved_per_10k": 688.323489323035,
+   "extra_repayers_per_10k": 636.0745115856429,
+   "age_gap": 0.2139183046451012,
+   "gender_gap": 0.06552140853362265,
+   "approval_by_age": {
+    "30-44": 0.8362424627102507,
+    "45-59": 0.9153269024651661,
+    "60+": 0.9840525328330206,
+    "<30": 0.7701342281879194
+   }
+  },
+  {
+   "option": "Second Look without pension signals",
+   "auc": 0.7257339674459182,
+   "approval_rate": 0.8717628350749659,
+   "bad_rate": 0.07791530944625408,
+   "extra_approved_per_10k": 747.3875511131304,
+   "extra_repayers_per_10k": 682.6442526124489,
+   "age_gap": 0.19789738553038605,
+   "gender_gap": 0.07097772079711462,
+   "approval_by_age": {
+    "30-44": 0.8476674071723262,
+    "45-59": 0.9088960342979635,
+    "60+": 0.9859287054409006,
+    "<30": 0.7880313199105146
+   }
+  },
+  {
+   "option": "Second Look, equal approval rate by age",
+   "auc": 0.7257196421862162,
+   "approval_rate": 0.8440481599273058,
+   "bad_rate": 0.07724397793029202,
+   "extra_approved_per_10k": 470.24079963652883,
+   "extra_repayers_per_10k": 432.7578373466606,
+   "age_gap": 0.043948622765970446,
+   "gender_gap": 0.06218768508371553,
+   "approval_by_age": {
+    "30-44": 0.8340209457315138,
+    "45-59": 0.8610217934976777,
+    "60+": 0.8170731707317073,
+    "<30": 0.8512304250559284
+   }
+  }
+ ],
+ "parity_cutoffs": {
+  "rate": 0.8599999999999923,
+  "thresholds": {
+   "30-44": 0.16838052055807196,
+   "45-59": 0.13814132910302107,
+   "60+": 0.07473019257849675,
+   "<30": 0.2104729321640184
+  }
+ },
  "importance": [
   {
    "feature": "DAYS_EMPLOYED",
@@ -322,5 +449,5 @@
   "trees_second_look": 610,
   "trees_combined": 606
  },
- "runtime_seconds": 76.2
+ "runtime_seconds": 94.4
 }

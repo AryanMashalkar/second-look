@@ -100,6 +100,17 @@ def test_fixed_policy_counts_what_the_cutoffs_approve():
     assert out["extra_repayers_per_10k"] == pytest.approx(2 * 10_000 / 6)
 
 
+def test_parity_cutoffs_equalise_approval_within_the_bad_rate_limit():
+    rng = np.random.default_rng(2)
+    groups = np.repeat(["young", "old"], 1000)
+    risk = np.concatenate([rng.uniform(0.1, 0.5, 1000), rng.uniform(0.0, 0.3, 1000)])  # the old look safer
+    y = (rng.uniform(size=2000) < risk).astype(int)
+    out = evaluate.parity_cutoffs(risk, groups, y, max_bad_rate=0.2)
+    ok = risk <= np.array([out["thresholds"][g] for g in groups])
+    assert abs(ok[groups == "young"].mean() - ok[groups == "old"].mean()) < 0.01
+    assert y[ok].mean() <= 0.2
+
+
 def test_bootstrap_ci_contains_point_estimate():
     rng = np.random.default_rng(1)
     y = rng.integers(0, 2, 500)

@@ -8,7 +8,8 @@
 |---|---|
 | **Team** | Aryan Mashalkar (solo) |
 | **Live demo** | **https://second-look-credit.streamlit.app** |
-| **Demo video** | [docs/second-look-demo.mp4](docs/second-look-demo.mp4) (2¼ min, narrated and captioned) |
+| **Who it is for** | Applicants with no credit bureau record whom the lender already knows from earlier applications (94% of them). For true first-time borrowers it adds nothing measurable, and the app says so. |
+| **Demo video** | [docs/second-look-demo.mp4](docs/second-look-demo.mp4) (2½ min, narrated and captioned) |
 
 ![Case desk](docs/queue.png)
 
@@ -31,7 +32,7 @@ Held-out test set: 20% of the 307,511 Home Credit loans, never seen in training.
 | **Second Look** | **0.726 (0.709–0.742)** | **+0.052 (+0.030 to +0.074)** |
 | Second Look + external score | 0.748 (0.731–0.764) | +0.075 (+0.061 to +0.089) |
 
-**What it means for lending.** Both cut-offs are chosen on the validation split, never on test: the external score approves 80% of no-bureau validation applicants, and Second Look approves the largest share whose default rate is no higher. Applied unchanged to the test applicants, the external score approves 79.7% (defaults 7.71%) and Second Look approves 86.6% (defaults 7.70%): **688 more people per 10,000**, of whom **636 actually repaid**.
+**What it means for lending.** Both cut-offs are chosen on the validation split, never on test: the external score approves 80% of no-bureau validation applicants, and Second Look approves the largest share whose default rate is no higher. Applied unchanged to the test applicants, the external score approves 79.7% (defaults 7.71%) and Second Look approves 86.6% (defaults 7.70%): **688 more people per 10,000** (95% CI 591 to 786), of whom **636 actually repaid** (549 to 729).
 
 ![Default rate vs approval rate](docs/policy.png)
 
@@ -43,6 +44,8 @@ Held-out test set: 20% of the 307,511 Home Credit loans, never seen in training.
 | Both decline | 466 | 33.5% |
 
 The people Second Look adds default less often than the people it drops.
+
+**Who it helps, and who it doesn't.** The gain comes from the lender's own records: 94% of no-bureau applicants had applied to this lender before. For the **472 true first-time borrowers** in the test set (no bureau record *and* no lender history), Second Look ranks no better than the external score (AUC 0.756 vs 0.751, difference +0.005, 95% CI −0.085 to +0.094), and its cut-off approves more of them at a higher default rate (7.4% vs 5.4%). So the app flags first-time borrowers on the case card and tells the officer to treat them as a standard review. Second Look is a second opinion for **thin-file customers the lender already knows**, not for people nobody has data on.
 
 **Everyone, not just thin files.** On all applicants Second Look is on par with the external score (0.726 vs 0.718, gain +0.009, CI +0.000 to +0.018). It is a second opinion for thin files, not a replacement.
 
@@ -59,7 +62,20 @@ The people Second Look adds default less often than the people it drops.
 
 Every group is approved more often, but **the age gap widens from 17.6 to 21.4 points**, because Second Look approves almost all over-60s. The gender gap widens by under one point (5.9 to 6.6).
 
-![Fairness audit](docs/fairness.png) This is reported, not hidden: a lender would need to address it before deployment.
+**What closing the age gap costs.** All rows are measured on test, with cut-offs chosen on validation:
+
+| Policy | Approved | Defaults among approved | Extra approvals per 10,000 | Age gap | Under 30 | 60+ |
+|---|---:|---:|---:|---:|---:|---:|
+| External credit score | 79.7% | 7.71% | — | 17.6 pts | 68% | 84% |
+| Second Look | 86.6% | 7.70% | +688 | 21.4 pts | 77% | 98% |
+| Second Look without pension signals (retrained) | 87.2% | 7.79% | +747 | 19.8 pts | 79% | 99% |
+| Second Look, equal approval rate by age | 84.4% | 7.72% | +470 | **4.4 pts** | 85% | 82% |
+
+- **Removing the age proxies does not help.** Without income type and employment fields the gap is still 19.8 points: older applicants in this data genuinely default less, so any accurate model favours them.
+- **Equal approval rates by age close it** to 4.4 points at the same default rate, at a cost of about a third of the extra approvals (+470 instead of +688). Every age band is still approved more often than under the external score except over-60s (82% vs 84%).
+- **The lender decides.** Using age at the decision step is regulated in many places and needs legal review. Second Look shows the trade-off on its Fairness tab; it does not make the choice.
+
+![Fairness audit](docs/fairness.png)
 
 All figures come from [`artifacts/metrics.json`](artifacts/metrics.json) and [`artifacts/fairness.csv`](artifacts/fairness.csv), written by the training script. The app reads those files; nothing is typed in by hand.
 
@@ -135,7 +151,7 @@ mkdir -p data/raw && cd data/raw
 for f in application_train bureau previous_application installments_payments; do kaggle competitions download -c home-credit-default-risk -f $f.csv -p . && unzip -o $f.csv.zip; done
 cd ../..
 python -m secondlook.train     # about 2 minutes on a laptop CPU; rewrites artifacts/
-pytest -q                      # 12 tests: features, metrics, and checks on the shipped model
+pytest -q                      # 13 tests: features, metrics, and checks on the shipped model
 ```
 
 ## Repository
@@ -158,8 +174,8 @@ pytest -q                      # 12 tests: features, metrics, and checks on the 
 
 - **Selection bias.** Outcomes exist only for people Home Credit lent to. Repayment of rejected applicants is unknown, so the claims are about *approved borrowers without a bureau record*, not the unbanked population as a whole.
 - **Not Indian data.** The lender and country are not disclosed. The method transfers; the model would need retraining on local data.
-- **Most no-bureau applicants (94%) had applied to this lender before.** Without that history the gain roughly halves (ablation: +0.036 instead of +0.052). For true first-time borrowers the benefit is smaller.
-- **Age gap.** See the fairness audit above.
+- **Most no-bureau applicants (94%) had applied to this lender before.** Without that history the gain roughly halves (ablation: +0.036 instead of +0.052), and for the 472 true first-time borrowers there is no measurable gain. The app flags them.
+- **Age gap.** Second Look widens it; closing it costs about a third of the extra approvals. See the table above.
 - **Counter-offers are correlational.** They describe what the model responds to, not a guarantee of repayment.
 - **Random split.** The data has no application dates, so the test set is a random hold-out, not a later time period.
 - **Prototype.** Not a validated credit model; not for real lending decisions.

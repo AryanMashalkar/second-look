@@ -1,0 +1,39 @@
+name: Keep the live demo awake
+# Streamlit Community Cloud sleeps apps after about 12 hours without visitors, and a plain HTTP
+# request does not count as one. A real browser visit every 8 hours keeps it warm for judges.
+on:
+  schedule:
+    - cron: "17 */8 * * *"
+  workflow_dispatch:
+jobs:
+  visit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install playwright==1.55.0 && python -m playwright install --with-deps chromium
+      - name: Open the app and wake it if it is asleep
+        run: |
+          python - <<'EOF'
+          from playwright.sync_api import sync_playwright
+
+          URL = "https://second-look-credit.streamlit.app"
+          with sync_playwright() as p:
+              page = p.chromium.launch().new_page()
+              page.goto(URL, timeout=120_000)
+              page.wait_for_timeout(10_000)
+              wake = page.get_by_role("button", name="Yes, get this app back up!")
+              if wake.count():
+                  print("app was asleep, waking it")
+                  wake.click()
+              ready = False
+              for _ in range(40):  # up to about 2 minutes
+                  ready = any(f.locator("text=Case desk").count() for f in page.frames)
+                  if ready:
+                      break
+                  page.wait_for_timeout(3_000)
+              print("app ready" if ready else "app not ready yet")
+              assert ready, "the app did not finish loading"
+          EOF

@@ -10,6 +10,7 @@ import lightgbm as lgb
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import train_test_split
 
 from secondlook import config, evaluate
@@ -68,7 +69,8 @@ def fit_baseline(train: pd.DataFrame) -> Baseline:
 
 
 def fit_lgb(train, valid, features):
-    dtrain = lgb.Dataset(train[features], train["TARGET"], categorical_feature=config.APP_CATEGORICAL)
+    categorical = [c for c in config.APP_CATEGORICAL if c in features]
+    dtrain = lgb.Dataset(train[features], train["TARGET"], categorical_feature=categorical)
     dvalid = lgb.Dataset(valid[features], valid["TARGET"], reference=dtrain)
     params = {**LGB_PARAMS, "monotone_constraints": [config.MONOTONE.get(f, 0) for f in features]}
     return lgb.train(
@@ -145,7 +147,21 @@ def main():
         "second_look": evaluate.fixed_policy(thin["TARGET"], thin["risk_baseline"], thin["risk_second_look"], base_thr, sl_thr),
         "combined": evaluate.fixed_policy(thin["TARGET"], thin["risk_baseline"], thin["risk_combined"], base_thr, comb_thr),
     }
+    results["no_bureau"]["policy_holdout"]["second_look"].update(
+        evaluate.bootstrap_policy(thin["TARGET"], thin["risk_baseline"] <= base_thr, thin["risk_second_look"] <= sl_thr)
+    )
     results["thresholds"] = {"baseline": base_thr, "second_look": sl_thr, "combined": comb_thr}
+
+    # True first-time borrowers: no bureau record and no earlier application with this lender either.
+    first = thin[thin["PREV_COUNT"] == 0]
+    results["first_time"] = {
+        "n": int(len(first)),
+        "default_rate": float(first["TARGET"].mean()),
+        "auc": evaluate.paired_bootstrap_auc(
+            first["TARGET"], {k: first[names[k]] for k in ("baseline", "second_look", "application_only")}, n_boot=1000
+        ),
+        "policy_holdout": evaluate.fixed_policy(first["TARGET"], first["risk_baseline"], first["risk_second_look"], base_thr, sl_thr),
+    }
 
     # Who changes decision, and how did they actually do?
     base_ok = thin["risk_baseline"] <= base_thr
@@ -170,6 +186,42 @@ def main():
     )
     fair.to_csv(config.ARTIFACTS / "fairness.csv", index=False)
     results["fairness_gaps"] = evaluate.fairness_gaps(fair).to_dict(orient="records")
+
+    # What closing the age gap would cost. Every option keeps the default rate at or below the baseline's on validation.
+    v_bad_limit = float(valid_thin["TARGET"].values[v_base <= base_thr].mean())
+    parity = evaluate.parity_cutoffs(v_sl, valid_thin["AGE_BAND"].astype(str), valid_thin["TARGET"], v_bad_limit)
+    parity_ok = thin["risk_second_look"] <= thin["AGE_BAND"].astype(str).map(parity["thresholds"])
+    # Pensions are the obvious age proxy; retrain without income type and employment fields to test that.
+    no_proxy = [f for f in config.SECOND_LOOK_FEATURES if f not in ("NAME_INCOME_TYPE", "EMPLOYED_YEARS_MISSING", "DAYS_EMPLOYED")]
+    np_booster = fit_lgb(train, valid, no_proxy)
+    v_np = np_booster.predict(valid_thin[no_proxy], num_iteration=np_booster.best_iteration)
+    np_rate = evaluate.matched_policy(valid_thin["TARGET"], v_base, v_np, config.BASELINE_APPROVAL_RATE)["model_approval_rate"]
+    t_np = np_booster.predict(thin[no_proxy], num_iteration=np_booster.best_iteration)
+
+    def option(name, ok, risk):
+        ok = pd.Series(np.asarray(ok), index=thin.index)
+        y = thin["TARGET"]
+        age = ok.groupby(thin["AGE_BAND"].astype(str)).mean()
+        sex = ok[thin["CODE_GENDER"].isin(["F", "M"])].groupby(thin["CODE_GENDER"].astype(str)).mean()
+        return {
+            "option": name,
+            "auc": float(roc_auc_score(y, risk)),
+            "approval_rate": float(ok.mean()),
+            "bad_rate": float(y[ok].mean()),
+            "extra_approved_per_10k": float((ok.sum() - base_ok.sum()) * 10_000 / len(thin)),
+            "extra_repayers_per_10k": float(((ok & (y == 0)).sum() - (base_ok & (y == 0)).sum()) * 10_000 / len(thin)),
+            "age_gap": float(age.max() - age.min()),
+            "gender_gap": float(sex.max() - sex.min()),
+            "approval_by_age": {k: float(v) for k, v in age.items()},
+        }
+
+    results["fairness_options"] = [
+        option("External credit score", base_ok, thin["risk_baseline"]),
+        option("Second Look", sl_ok, thin["risk_second_look"]),
+        option("Second Look without pension signals", t_np <= evaluate.threshold_for_rate(v_np, np_rate), t_np),
+        option("Second Look, equal approval rate by age", parity_ok, thin["risk_second_look"]),
+    ]
+    results["parity_cutoffs"] = parity
 
     # Global importance: mean absolute contribution on no-bureau test applicants.
     sample = thin.sample(min(5000, len(thin)), random_state=config.SEED)

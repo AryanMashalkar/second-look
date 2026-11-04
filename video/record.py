@@ -138,12 +138,16 @@ def main():
             for _ in range(4):
                 page.keyboard.press("ArrowLeft")
             page.wait_for_timeout(1800)
+        page.wait_for_timeout(2500)
+        scroll_to(page.get_by_text("Who it helps, and who it doesn't"), "start")
 
         at("fairness")
         tab("Fairness")
         scroll_to(page.get_by_text("Approval rates by group"), "start")
         page.wait_for_timeout(4000)
         page.get_by_text("Approval rate among people who repaid").click()
+        page.wait_for_timeout(3500)
+        scroll_to(page.get_by_text("What closing the age gap costs"), "start")
 
         at("close")
         page.evaluate(CARD, CLOSE)
