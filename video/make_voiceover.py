@@ -19,7 +19,7 @@ import edge_tts
 
 ELEVEN_VOICE = "cjVigY5qzO86Huf0OWal"  # Eric - Smooth, Trustworthy (premade library voice)
 ELEVEN_MODEL = "eleven_multilingual_v2"
-VOICE = "en-US-AndrewMultilingualNeural"
+VOICE = "en-GB-RyanNeural"
 RATE = "+4%"
 GAP = 0.5  # seconds of silence after each scene
 BUILD = Path(__file__).resolve().parent / "build"
@@ -29,25 +29,25 @@ SCENES = [
     ("title", "One in seven loan applicants in our data has no credit bureau record. "
               "Lenders still judge them with an outside credit score, and for these people that score is at its weakest. "
               "Second Look gives them a second opinion."),
-    ("overview", "It's a review queue for loan officers. "
+    ("overview", "It's a case desk for loan officers. "
                  "On eight thousand eight hundred real applicants the model never saw, it ranks risk better than the external score. "
-                 "And at the same default rate, it approves six hundred and sixty more people per ten thousand. "
-                 "Six hundred and ten of them paid back."),
+                 "And with cut-offs fixed before testing, it approves nearly seven hundred more people per ten thousand, with no rise in defaults. "
+                 "More than six hundred and thirty of them paid back."),
     ("approve", "Here's someone the external score would decline. "
-                "Second Look puts their risk at two and a half percent, and approves. "
-                "The chart says why. Sixteen years in the same job, higher education, "
-                "and a hundred and nine instalments already paid to this lender. "
-                "Green bars lower the risk, red bars raise it, and every bar is the model's actual math."),
-    ("caution", "Now the other way round. The external score approves this applicant, but Second Look sees only two years in the current job, "
-                "and earlier loans granted at about half of what was asked. "
-                "So instead of a flat no, it suggests a counter-offer: a ten percent smaller loan brings the risk under the line. "
+                "Second Look puts their risk at about three percent, and approves. "
+                "They're a state employee with fifty-two instalments already paid to this lender, and only six percent of them late. "
+                "The chart shows exactly which factors pushed the risk down, and which pushed it up."),
+    ("caution", "Now the other way round. The external score approves this applicant, "
+                "but Second Look sees that thirty-eight percent of their earlier instalments were paid late, something the outside score never sees. "
+                "So instead of a flat yes, it suggests a counter-offer: a ten percent smaller loan brings the risk under the line. "
                 "It only changes the loan terms, never who the person is."),
-    ("whatif", "The officer can try other terms and watch the risk update live."),
+    ("whatif", "The officer can try other terms and watch the stamp change."),
     ("decide", "But the model never decides. The officer picks an action, writes a reason, "
                "and every decision lands in a log they can export."),
-    ("evidence", "The Evidence tab shows the receipts. Every number comes from real held-out applicants, with confidence intervals. "
-                 "At every approval rate, Second Look's approved group defaults less often. "
-                 "And an ablation shows most of the gain comes from the lender's own repayment records."),
+    ("trial", "There's also a tab to score any applicant you like. "
+              "Change the loan, the job or the repayment history, and both decisions update as you go."),
+    ("evidence", "The Evidence tab shows the receipts. Pick any approval rate, and Second Look's approved group defaults less often. "
+                 "Every number comes from real held-out applicants, with confidence intervals."),
     ("fairness", "Gender and age are not inputs, but we audit them anyway. "
                  "Every group gets approved more often. The age gap does get wider, and we report that instead of hiding it."),
     ("close", "Second Look. Built in forty-eight hours with LightGBM and Streamlit, on real Home Credit data. "

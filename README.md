@@ -8,16 +8,17 @@
 |---|---|
 | **Team** | Aryan Mashalkar (solo) |
 | **Live demo** | **https://second-look-credit.streamlit.app** |
-| **Demo video** | [docs/second-look-demo.mp4](docs/second-look-demo.mp4) (2 min, captioned) |
+| **Demo video** | [docs/second-look-demo.mp4](docs/second-look-demo.mp4) (2¼ min, narrated and captioned) |
 
-![Review queue](docs/queue.png)
+![Case desk](docs/queue.png)
 
 ## Judge quick start
 
 1. Open the [live demo](https://second-look-credit.streamlit.app). Nothing to install, no login. If it has been asleep it takes about 30 seconds to wake; if a red "failed to fetch" box appears, refresh the page once.
-2. **Review queue**: open any `Second look: approve` profile. The external score declines it; Second Look approves it and shows why, plus a counter-offer for declined cases.
-3. **Evidence**: every number is computed on **8,804 real held-out applicants with no bureau record**, with 95% bootstrap intervals.
-4. To check the numbers yourself: `python -m secondlook.train` rebuilds every metric in about 2 minutes (see [Run it locally](#run-it-locally)).
+2. **Case desk**: open any case under *Score declines, Second Look approves*. The external score declines it; Second Look approves it and shows why. Cases under *Score approves, Second Look cautions* get a counter-offer, and the officer records the decision.
+3. **Try an applicant**: fill in your own applicant and watch both decisions update.
+4. **Evidence** and **Fairness**: every number is computed on **8,804 real held-out applicants with no bureau record**, with 95% bootstrap intervals.
+5. To check the numbers yourself: `python -m secondlook.train` rebuilds every metric in about 2 minutes (see [Run it locally](#run-it-locally)).
 
 ## Results
 
@@ -30,16 +31,16 @@ Held-out test set: 20% of the 307,511 Home Credit loans, never seen in training.
 | **Second Look** | **0.726 (0.709–0.742)** | **+0.052 (+0.030 to +0.074)** |
 | Second Look + external score | 0.748 (0.731–0.764) | +0.075 (+0.061 to +0.089) |
 
-**What it means for lending.** If the external score approves 80% of no-bureau applicants, approved loans default at 7.7%. At that **same default rate**, Second Look approves 86.6%: **660 more people per 10,000**, of whom **610 actually repaid**.
+**What it means for lending.** Both cut-offs are chosen on the validation split, never on test: the external score approves 80% of no-bureau validation applicants, and Second Look approves the largest share whose default rate is no higher. Applied unchanged to the test applicants, the external score approves 79.7% (defaults 7.71%) and Second Look approves 86.6% (defaults 7.70%): **688 more people per 10,000**, of whom **636 actually repaid**.
 
 ![Default rate vs approval rate](docs/policy.png)
 
 | No-bureau test applicants | Count | Actually defaulted |
 |---|---:|---:|
-| Both approve | 6,321 | 6.2% |
-| Only Second Look approves | 1,303 | 14.9% |
-| Only the external score approves | 722 | 20.8% |
-| Both decline | 458 | 33.6% |
+| Both approve | 6,302 | 6.2% |
+| Only Second Look approves | 1,321 | 14.7% |
+| Only the external score approves | 715 | 20.7% |
+| Both decline | 466 | 33.5% |
 
 The people Second Look adds default less often than the people it drops.
 
@@ -49,14 +50,16 @@ The people Second Look adds default less often than the people it drops.
 
 | Group | External score approves | Second Look approves |
 |---|---:|---:|
-| Women | 82.2% | 89.0% |
-| Men | 76.3% | 82.5% |
-| Under 30 | 67.9% | 77.0% |
-| 30–44 | 80.3% | 83.7% |
-| 45–59 | 85.6% | 91.5% |
-| 60+ | 84.5% | 98.4% |
+| Women | 81.9% | 89.0% |
+| Men | 76.0% | 82.5% |
+| Under 30 | 67.7% | 77.0% |
+| 30–44 | 80.0% | 83.6% |
+| 45–59 | 85.3% | 91.5% |
+| 60+ | 84.3% | 98.4% |
 
-Every group is approved more often, but **the age gap widens from 17.7 to 21.4 points**, because Second Look approves almost all over-60s. The gender gap widens by under one point. This is reported, not hidden: a lender would need to address it before deployment.
+Every group is approved more often, but **the age gap widens from 17.6 to 21.4 points**, because Second Look approves almost all over-60s. The gender gap widens by under one point (5.9 to 6.6).
+
+![Fairness audit](docs/fairness.png) This is reported, not hidden: a lender would need to address it before deployment.
 
 All figures come from [`artifacts/metrics.json`](artifacts/metrics.json) and [`artifacts/fairness.csv`](artifacts/fairness.csv), written by the training script. The app reads those files; nothing is typed in by hand.
 
@@ -73,7 +76,13 @@ Second Look is a **review queue for loan officers**. For every no-bureau applica
 3. **Proposes a counter-offer** for declined applicants: the smallest change in loan amount or term that brings risk inside the cut-off. It changes only lender-negotiable terms, never who the person is.
 4. **Leaves the decision to a person**: the officer records approve, counter-offer, request documents or decline, with a mandatory reason, in an exportable log.
 
-![Explanation, counter-offer and officer decision](docs/explain.png)
+| Why Second Look disagrees | Counter-offer and what-if |
+|---|---|
+| ![Explanation](docs/explain.png) | ![Counter-offer](docs/counteroffer.png) |
+
+Officers can also score an applicant of their own and see both decisions update live:
+
+![Try an applicant](docs/try.png)
 
 ## How it works
 
@@ -100,7 +109,7 @@ bureau.csv (IDs only) ───────────────────�
 - **Features**: affordability ratios (loan/income, monthly repayment/income, term, goods price/loan), employment, region, documents, social-circle defaults, and the lender's history: earlier applications, refusal share, and late, underpaid and days-late instalment rates.
 - **Excluded from Second Look**: `EXT_SOURCE_*` (that is the baseline), bureau enquiry counts, gender, age and family status.
 - **Monotone constraints**: more late payments, underpayment, refusals, social-circle defaults or a heavier repayment burden can never lower risk. This keeps explanations and counter-offers consistent with common sense, at a cost of 0.0006 AUC.
-- **Cut-offs**: the baseline approves 80% of no-bureau applicants. Second Look's cut-off is the most generous one with the same default rate on test data.
+- **Cut-offs**: chosen on the no-bureau validation split. The baseline approves 80%; Second Look's cut-off is the most generous one with no higher default rate. The test set is only used to measure them.
 - **Counter-offers**: a grid search over loan amount (50–100%) and term (75–150%), ordered by how big the change is, capped at 72 months.
 
 ## Technology
@@ -126,7 +135,7 @@ mkdir -p data/raw && cd data/raw
 for f in application_train bureau previous_application installments_payments; do kaggle competitions download -c home-credit-default-risk -f $f.csv -p . && unzip -o $f.csv.zip; done
 cd ../..
 python -m secondlook.train     # about 2 minutes on a laptop CPU; rewrites artifacts/
-pytest -q                      # 11 tests: features, metrics, and checks on the shipped model
+pytest -q                      # 12 tests: features, metrics, and checks on the shipped model
 ```
 
 ## Repository
@@ -138,8 +147,11 @@ pytest -q                      # 11 tests: features, metrics, and checks on the 
 | `secondlook/evaluate.py` | Paired bootstrap, policy curves, fairness |
 | `secondlook/model.py` | Scoring, reason codes, counter-offers |
 | `secondlook/demo_data.py` | Synthetic demo profiles |
+| `secondlook/ui.py` | App styling and HTML pieces (case card, stamps, ledger) |
 | `streamlit_app.py` | The loan-officer app |
 | `tests/` | Unit tests and artifact checks |
+| `scripts/screenshots.py` | Regenerates the README screenshots from a running app |
+| `video/` | Narration script and Playwright recorder for the demo video |
 | `artifacts/` | Trained model, thresholds, metrics, curves, demo profiles, training log |
 
 ## Limitations
@@ -158,6 +170,6 @@ Data: [Home Credit Default Risk](https://www.kaggle.com/competitions/home-credit
 
 ## AI tools used
 
-The demo video is a real screen recording of the app (Playwright, `video/record.py`) with an **AI-generated voiceover from ElevenLabs** (premade voice "Eric", script in `video/make_voiceover.py`) and burned-in captions.
+The demo video is a real screen recording of the app (Playwright, `video/record.py`) with an **AI-generated voiceover** (Microsoft neural text-to-speech, UK voice "Ryan", via edge-tts; script in `video/make_voiceover.py`) and burned-in captions. `video/assemble.py` mixes them into the final file.
 
-This project was built with **Claude Code (Anthropic, Claude Opus 5.5)**, which helped research the problem space, write the code, tests and README, and debug. One bug it caught: `AMT_ANNUITY` is a monthly payment, not yearly. The modelling choices, evaluation design and every reported number were checked by running the code on the real data; the numbers in this README are copied from `artifacts/metrics.json`.
+This project was built with **Claude Code (Anthropic, Claude Opus 5.5)**, which helped research the problem space, write the code, tests and README, and debug. One bug it caught: the repayment burden was first computed as if income were yearly, but in this data income and `AMT_ANNUITY` both behave like monthly amounts, so the ratio was off by a factor of twelve. Another review caught that the operating cut-offs had been chosen on the test set; they now come from the validation split. The modelling choices, evaluation design and every reported number were checked by running the code on the real data; the numbers in this README are copied from `artifacts/metrics.json`.

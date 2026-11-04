@@ -14,7 +14,18 @@ OUT = Path(__file__).resolve().parent.parent / "docs"
 
 
 def settle(page, ms=2500):
-    page.wait_for_selector("text=Second Look", timeout=60_000)
+    page.wait_for_selector("text=Review queue", timeout=60_000)
+    page.wait_for_selector(".stPlotlyChart", timeout=60_000)
+    page.wait_for_timeout(ms)
+
+
+def to_top(locator, ms=900):
+    locator.evaluate("e => e.scrollIntoView({block: 'start'})")
+    locator.page.wait_for_timeout(ms)
+
+
+def tab(page, name, ms=2500):
+    page.get_by_role("tab", name=name, exact=True).click()
     page.wait_for_timeout(ms)
 
 
@@ -24,26 +35,30 @@ def main():
         browser = p.chromium.launch()
         page = browser.new_page(viewport={"width": 1440, "height": 1000}, device_scale_factor=1)
         page.goto(URL)
-        settle(page, 5000)
-        page.screenshot(path=OUT / "queue.png", full_page=False)
+        settle(page, 4000)
+        page.screenshot(path=OUT / "queue.png")
 
-        page.get_by_text("What if the loan terms change?").click()
-        page.wait_for_timeout(1500)
-        page.get_by_text("Officer decision").scroll_into_view_if_needed()
-        page.wait_for_timeout(800)
-        page.screenshot(path=OUT / "explain.png", full_page=False)
+        # A case the external score approves but Second Look flags: reasons, then the counter-offer.
+        page.get_by_text("SL-1031", exact=True).click()
+        page.wait_for_timeout(2500)
+        to_top(page.locator(".sl-case").first)
+        page.screenshot(path=OUT / "case.png")
+        to_top(page.get_by_text("Each bar is the exact contribution"))
+        page.screenshot(path=OUT / "explain.png")
+        tab(page, "Counter-offer and what-if", 1500)
+        to_top(page.locator(".sl-slip").first)
+        page.screenshot(path=OUT / "counteroffer.png")
 
-        page.get_by_role("tab", name="Evidence").click()
-        page.wait_for_timeout(3000)
-        page.screenshot(path=OUT / "evidence.png")
-        # Charts on the Evidence tab: 0 is the reason chart on the queue tab.
-        policy_chart = page.locator(".stPlotlyChart").nth(1)
-        policy_chart.scroll_into_view_if_needed()
-        page.wait_for_timeout(1500)
-        policy_chart.screenshot(path=OUT / "policy.png")
-        fairness_note = page.get_by_text("Every gender and age group is approved more often")
-        fairness_note.scroll_into_view_if_needed()
-        page.wait_for_timeout(1000)
+        tab(page, "Try an applicant")
+        to_top(page.get_by_text("Score an applicant of your own"))
+        page.screenshot(path=OUT / "try.png")
+
+        tab(page, "Evidence", 3000)
+        to_top(page.get_by_text("Set your own lending policy"), 1500)
+        page.screenshot(path=OUT / "policy.png")
+
+        tab(page, "Fairness", 3000)
+        to_top(page.get_by_text("Approval rates by group"))
         page.screenshot(path=OUT / "fairness.png")
         browser.close()
 

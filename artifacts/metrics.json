@@ -90,6 +90,24 @@
     "extra_approved_per_10k": 914.3571104043617,
     "extra_repayers_per_10k": 843.9345751930941
    }
+  },
+  "policy_holdout": {
+   "second_look": {
+    "baseline_approval_rate": 0.7970240799636529,
+    "baseline_bad_rate": 0.07709847513182272,
+    "model_approval_rate": 0.8658564288959564,
+    "model_bad_rate": 0.07700380427653154,
+    "extra_approved_per_10k": 688.323489323035,
+    "extra_repayers_per_10k": 636.0745115856429
+   },
+   "combined": {
+    "baseline_approval_rate": 0.7970240799636529,
+    "baseline_bad_rate": 0.07709847513182272,
+    "model_approval_rate": 0.8824398000908678,
+    "model_bad_rate": 0.07594284978761745,
+    "extra_approved_per_10k": 854.1572012721491,
+    "extra_repayers_per_10k": 798.5006815084053
+   }
   }
  },
  "all": {
@@ -165,40 +183,40 @@
   }
  },
  "thresholds": {
-  "baseline": 0.13289134540255765,
-  "second_look": 0.1691362748009884,
-  "combined": 0.2019788099794894
+  "baseline": 0.13212263635216304,
+  "second_look": 0.16910058174875484,
+  "combined": 0.19492808745594717
  },
  "decision_changes_no_bureau": {
   "both_approve": {
-   "n": 6321,
-   "default_rate": 0.062173706691979115
+   "n": 6302,
+   "default_rate": 0.06236115518882894
   },
   "second_look_only": {
-   "n": 1303,
-   "default_rate": 0.1488871834228703
+   "n": 1321,
+   "default_rate": 0.1468584405753217
   },
   "baseline_only": {
-   "n": 722,
-   "default_rate": 0.2077562326869806
+   "n": 715,
+   "default_rate": 0.206993006993007
   },
   "both_decline": {
-   "n": 458,
-   "default_rate": 0.33624454148471616
+   "n": 466,
+   "default_rate": 0.33476394849785407
   }
  },
  "fairness_gaps": [
   {
    "model": "baseline",
    "attribute": "AGE_BAND",
-   "approval_gap": 0.17740636037319168,
-   "repayer_approval_gap": 0.1628039539156909
+   "approval_gap": 0.17642806275491485,
+   "repayer_approval_gap": 0.16224660261597457
   },
   {
    "model": "baseline",
    "attribute": "CODE_GENDER",
-   "approval_gap": 0.05870323477570061,
-   "repayer_approval_gap": 0.046846783095058186
+   "approval_gap": 0.058902282891260316,
+   "repayer_approval_gap": 0.04705387328023225
   },
   {
    "model": "second_look",
@@ -209,8 +227,8 @@
   {
    "model": "second_look",
    "attribute": "CODE_GENDER",
-   "approval_gap": 0.0657013941347746,
-   "repayer_approval_gap": 0.05449656271918779
+   "approval_gap": 0.06552140853362265,
+   "repayer_approval_gap": 0.054299324060410714
   }
  ],
  "importance": [
@@ -304,5 +322,5 @@
   "trees_second_look": 610,
   "trees_combined": 606
  },
- "runtime_seconds": 99.8
+ "runtime_seconds": 76.2
 }

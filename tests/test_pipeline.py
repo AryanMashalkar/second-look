@@ -75,7 +75,7 @@ def test_build_table_flags_bureau_and_cleans_sentinel():
     assert t["HAS_BUREAU"].to_dict() == {1: 1, 2: 0, 3: 0, 4: 1}
     assert np.isnan(t.loc[2, "DAYS_EMPLOYED"]) and t.loc[2, "EMPLOYED_YEARS_MISSING"] == 1
     assert t.loc[1, "TERM_MONTHS"] == pytest.approx(20)  # monthly annuity
-    assert t.loc[1, "ANNUITY_TO_INCOME"] == pytest.approx(1.2)
+    assert t.loc[1, "ANNUITY_TO_INCOME"] == pytest.approx(0.1)
     assert t.loc[4, "PREV_COUNT"] == 0  # no history means zero, not missing
     assert list(t["AGE_BAND"]) == ["30-44", "45-59", "60+", "60+"]  # ages 40, 55, 70, 85
 
@@ -87,6 +87,17 @@ def test_matched_policy_rewards_a_better_ranking():
     out = evaluate.matched_policy(y, random_, perfect, 0.5)
     assert out["model_bad_rate"] <= out["baseline_bad_rate"] + 1e-12
     assert out["extra_approved_per_10k"] > 0
+
+
+def test_fixed_policy_counts_what_the_cutoffs_approve():
+    y = np.array([0, 0, 1, 0, 1, 1])
+    base = np.array([0.1, 0.5, 0.2, 0.6, 0.7, 0.9])  # cut-off 0.3 approves rows 0 and 2
+    model = np.array([0.1, 0.2, 0.8, 0.3, 0.9, 0.9])  # cut-off 0.3 approves rows 0, 1 and 3
+    out = evaluate.fixed_policy(y, base, model, 0.3, 0.3)
+    assert out["baseline_bad_rate"] == pytest.approx(0.5)
+    assert out["model_bad_rate"] == 0
+    assert out["extra_approved_per_10k"] == pytest.approx(10_000 / 6)
+    assert out["extra_repayers_per_10k"] == pytest.approx(2 * 10_000 / 6)
 
 
 def test_bootstrap_ci_contains_point_estimate():

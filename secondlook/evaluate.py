@@ -82,6 +82,25 @@ def matched_policy(y, baseline_risk, model_risk, baseline_rate: float) -> dict:
     }
 
 
+def fixed_policy(y, baseline_risk, model_risk, baseline_thr: float, model_thr: float) -> dict:
+    """Apply cut-offs chosen elsewhere (on validation) and report what they do on this population."""
+    y = np.asarray(y)
+    n = len(y)
+    base_ok = np.asarray(baseline_risk) <= baseline_thr
+    model_ok = np.asarray(model_risk) <= model_thr
+    k_base, k_model = int(base_ok.sum()), int(model_ok.sum())
+    base_bad, model_bad = int(y[base_ok].sum()), int(y[model_ok].sum())
+    per = 10_000 / n
+    return {
+        "baseline_approval_rate": k_base / n,
+        "baseline_bad_rate": base_bad / k_base if k_base else 0.0,
+        "model_approval_rate": k_model / n,
+        "model_bad_rate": model_bad / k_model if k_model else 0.0,
+        "extra_approved_per_10k": float((k_model - k_base) * per),
+        "extra_repayers_per_10k": float(((k_model - model_bad) - (k_base - base_bad)) * per),
+    }
+
+
 def threshold_for_rate(risk, rate: float) -> float:
     """Risk cut-off that approves `rate` of this population."""
     return float(np.quantile(np.asarray(risk), rate))

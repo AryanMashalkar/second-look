@@ -40,7 +40,7 @@ CLOSE = """
 <div style="font-size:64px;font-weight:700">🔎 Second Look</div>
 <div style="font-size:26px;margin-top:30px">Live demo: <b>second-look-credit.streamlit.app</b></div>
 <div style="font-size:26px;margin-top:10px">Code, tests and metrics: <b>github.com/AryanMashalkar/second-look</b></div>
-<div style="font-size:18px;margin-top:56px;opacity:.7">Data: Home Credit Default Risk (Kaggle). Demo profiles are synthetic. Voiceover is AI-generated (ElevenLabs).</div>
+<div style="font-size:18px;margin-top:56px;opacity:.7">Data: Home Credit Default Risk (Kaggle). Demo profiles are synthetic. Voiceover is AI-generated (Microsoft neural TTS).</div>
 """
 
 
@@ -59,7 +59,7 @@ def main():
         page = ctx.new_page()
         video_start = time.monotonic()
         page.goto(URL)
-        page.wait_for_selector("text=Ranking quality", timeout=60_000)
+        page.wait_for_selector("text=Review queue", timeout=60_000)
         page.wait_for_selector(".stPlotlyChart", timeout=60_000)
         page.wait_for_timeout(2500)
 
@@ -73,57 +73,77 @@ def main():
             if delay > 0:
                 time.sleep(delay)
 
+        def tab(name):
+            page.get_by_role("tab", name=name, exact=True).click()
+            page.wait_for_timeout(500)
+
         at("overview")
         page.evaluate("() => { const d = document.getElementById('sl-card'); d.style.opacity = 0; setTimeout(() => d.remove(), 700); }")
 
         at("approve")
+        scroll_to(page.locator(".sl-case").first, "start")
+        page.wait_for_timeout(9000)
         scroll_to(page.locator(".stPlotlyChart").first)
 
         at("caution")
-        box = page.locator('[data-testid="stSelectbox"]').filter(has_text="Open profile")
-        scroll_to(box, "start")
-        page.wait_for_timeout(600)
-        box.click()
-        page.wait_for_timeout(400)
-        page.keyboard.type("SL-1001", delay=60)
-        page.keyboard.press("Enter")
-        page.wait_for_timeout(1800)
-        scroll_to(page.locator(".stPlotlyChart").first)
-        page.wait_for_timeout(6500)
-        scroll_to(page.get_by_text("Counter-offer:"))
+        case = page.get_by_text("SL-1031", exact=True)
+        scroll_to(case)
+        page.wait_for_timeout(700)
+        case.click()
+        page.wait_for_timeout(1500)
+        scroll_to(page.locator(".sl-case").first, "start")
+        page.wait_for_timeout(8000)
+        tab("Counter-offer and what-if")
+        scroll_to(page.locator(".sl-slip").first)
 
         at("whatif")
-        page.get_by_text("What if the loan terms change?").click()
-        page.wait_for_timeout(600)
         slider = page.get_by_role("slider").first
         scroll_to(slider)
-        page.wait_for_timeout(500)
+        page.wait_for_timeout(400)
         slider.focus()
         for _ in range(2):
             page.keyboard.press("ArrowLeft")
-            page.wait_for_timeout(700)
+            page.wait_for_timeout(600)
 
         at("decide")
-        scroll_to(page.get_by_text("Officer decision"), "start")
-        page.wait_for_timeout(700)
+        tab("Decide")
+        scroll_to(page.get_by_text("Approve with counter-offer"))
+        page.wait_for_timeout(500)
         page.get_by_text("Approve with counter-offer").click()
-        page.wait_for_timeout(400)
-        page.get_by_label("Reason (required, shared with the applicant if declined)").click()
-        page.keyboard.type("Stable income; offered a 10% smaller loan.", delay=35)
         page.wait_for_timeout(300)
+        page.get_by_label("Reason (required, shared with the applicant if declined)").click()
+        page.keyboard.type("Late payments noted; offered a 10% smaller loan.", delay=30)
         page.get_by_role("button", name="Record decision").click()
         page.wait_for_timeout(1500)
         scroll_to(page.get_by_text("Download decision log"))
 
+        at("trial")
+        tab("Try an applicant")
+        scroll_to(page.get_by_text("Score an applicant of your own"), "start")
+        page.wait_for_timeout(1500)
+        late = page.locator('[data-testid="stSlider"]').filter(has_text="Share of them paid late").get_by_role("slider")
+        late.focus()
+        for _ in range(4):  # a few big steps, letting each rerun finish so the page never sits dimmed
+            for _ in range(8):
+                page.keyboard.press("ArrowRight")
+            page.wait_for_timeout(1400)
+
         at("evidence")
-        page.get_by_role("tab", name="Evidence").click()
-        page.wait_for_timeout(300)
-        scroll_to(page.get_by_role("tab", name="Evidence"), "start")
-        page.wait_for_timeout(5000)
-        scroll_to(page.locator(".stPlotlyChart").nth(1))
+        tab("Evidence")
+        policy = page.locator('[data-testid="stSlider"]').filter(has_text="Approve this share").get_by_role("slider")
+        scroll_to(policy, "start")
+        page.wait_for_timeout(1500)
+        policy.focus()
+        for _ in range(2):
+            for _ in range(4):
+                page.keyboard.press("ArrowLeft")
+            page.wait_for_timeout(1800)
 
         at("fairness")
-        scroll_to(page.get_by_text("Every gender and age group is approved more often"))
+        tab("Fairness")
+        scroll_to(page.get_by_text("Approval rates by group"), "start")
+        page.wait_for_timeout(4000)
+        page.get_by_text("Approval rate among people who repaid").click()
 
         at("close")
         page.evaluate(CARD, CLOSE)

@@ -127,14 +127,24 @@ def main():
         }
         results[label] = {"auc": aucs, "policy": policy}
 
-    # Operating thresholds come from the no-bureau test population.
-    base_thr = evaluate.threshold_for_rate(thin["risk_baseline"], config.BASELINE_APPROVAL_RATE)
-    sl_rate = results["no_bureau"]["policy"]["second_look"]["model_approval_rate"]
-    sl_thr = evaluate.threshold_for_rate(thin["risk_second_look"], sl_rate)
-    comb_rate = results["no_bureau"]["policy"]["combined"]["model_approval_rate"]
-    comb_thr = evaluate.threshold_for_rate(thin["risk_combined"], comb_rate)
+    # Operating cut-offs are chosen on the no-bureau validation split, never on test: the baseline approves
+    # BASELINE_APPROVAL_RATE, Second Look the largest share with no higher default rate than the baseline.
+    valid_thin = valid[valid["HAS_BUREAU"] == 0]
+    v_base = baseline.risk(valid_thin)
+    v_sl = second_look.risk(valid_thin)
+    v_comb = comb_booster.predict(valid_thin[config.COMBINED_FEATURES], num_iteration=comb_booster.best_iteration)
+    base_thr = evaluate.threshold_for_rate(v_base, config.BASELINE_APPROVAL_RATE)
+    sl_rate = evaluate.matched_policy(valid_thin["TARGET"], v_base, v_sl, config.BASELINE_APPROVAL_RATE)["model_approval_rate"]
+    sl_thr = evaluate.threshold_for_rate(v_sl, sl_rate)
+    comb_rate = evaluate.matched_policy(valid_thin["TARGET"], v_base, v_comb, config.BASELINE_APPROVAL_RATE)["model_approval_rate"]
+    comb_thr = evaluate.threshold_for_rate(v_comb, comb_rate)
     baseline.threshold = base_thr
     second_look.threshold = sl_thr
+    # What those fixed cut-offs actually do on the untouched test applicants.
+    results["no_bureau"]["policy_holdout"] = {
+        "second_look": evaluate.fixed_policy(thin["TARGET"], thin["risk_baseline"], thin["risk_second_look"], base_thr, sl_thr),
+        "combined": evaluate.fixed_policy(thin["TARGET"], thin["risk_baseline"], thin["risk_combined"], base_thr, comb_thr),
+    }
     results["thresholds"] = {"baseline": base_thr, "second_look": sl_thr, "combined": comb_thr}
 
     # Who changes decision, and how did they actually do?
